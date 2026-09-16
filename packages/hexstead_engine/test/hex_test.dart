@@ -8,7 +8,8 @@ void main() {
     test('value equality and hashability', () {
       expect(const Hex(1, -2), equals(const Hex(1, -2)));
       expect(const Hex(1, -2), isNot(equals(const Hex(-2, 1))));
-      expect({const Hex(0, 0), const Hex(0, 0)}.length, 1);
+      final set = {const Hex(0, 0)}..add(const Hex(0, 0));
+      expect(set.length, 1);
     });
 
     test('addition', () {
