@@ -88,31 +88,25 @@ class BoardPainter extends CustomPainter {
       );
     }
 
-    // Resource icon on a dark plate so it reads on every terrain color
-    // (wheat-on-gold was invisible without it).
-    final iconCenter = center - Offset(0, hexSize * 0.36);
-    canvas.drawCircle(
-      iconCenter,
-      hexSize * 0.34,
-      Paint()..color = const Color(0x30000000),
-    );
-    _text(canvas, terrainEmoji[tile.terrain]!, iconCenter, hexSize * 0.44);
+    // Resource icon fills the hex — the tile IS its resource.
+    _text(canvas, terrainEmoji[tile.terrain]!,
+        center - Offset(0, hexSize * 0.14), hexSize * 0.95);
 
-    // Number token in the lower half; 6/8 are the frequent rolls, in red.
+    // Number token tucked at the bottom; 6/8 are the frequent rolls, in red.
     final number = tile.number;
     if (number != null) {
-      final tokenCenter = center + Offset(0, hexSize * 0.32);
+      final tokenCenter = center + Offset(0, hexSize * 0.58);
       final hot = number == 6 || number == 8;
       canvas.drawCircle(
         tokenCenter,
-        hexSize * 0.24,
+        hexSize * 0.26,
         Paint()..color = const Color(0xFFF4EAD4),
       );
       _text(
         canvas,
         '$number',
         tokenCenter,
-        hexSize * 0.30,
+        hexSize * 0.32,
         color: hot ? const Color(0xFFB33D3D) : const Color(0xFF4A3B28),
         bold: hot,
       );
@@ -121,7 +115,7 @@ class BoardPainter extends CustomPainter {
     // Building badge on a disc of the OWNER's color, so the tent/village
     // reads as "this player's settlement", not just decoration.
     if (tile.level >= 1 && tile.ownerId != null) {
-      final badgeCenter = center + Offset(-hexSize * 0.42, hexSize * 0.32);
+      final badgeCenter = center + Offset(-hexSize * 0.52, hexSize * 0.52);
       canvas.drawCircle(
         badgeCenter,
         hexSize * 0.26,
