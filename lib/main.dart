@@ -5,7 +5,9 @@ import 'state/game_controller.dart';
 import 'state/persistence.dart';
 
 void main() {
-  runApp(HexsteadApp(controller: GameController(saveStore: FileSaveStore())));
+  runApp(
+    HexsteadApp(controller: GameController(saveStore: createSaveStore())),
+  );
 }
 
 class HexsteadApp extends StatelessWidget {

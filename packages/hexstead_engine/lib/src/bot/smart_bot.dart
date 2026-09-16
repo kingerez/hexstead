@@ -73,10 +73,16 @@ abstract final class SmartBot {
     return (h % 2001 - 1000) / 1000.0;
   }
 
+  /// Web-safe mixer: xor/shift/add only, all intermediates 32-bit, so it is
+  /// exact (and identical) on the VM and dart2js.
   static int _hash(int a, int b) {
-    var x = a * 0x9E3779B1 + b;
-    x = ((x ^ (x >>> 16)) * 0x85EBCA6B) & 0xFFFFFFFF;
-    x = ((x ^ (x >>> 13)) * 0xC2B2AE35) & 0xFFFFFFFF;
-    return (x ^ (x >>> 16)) & 0x7FFFFFFF;
+    var x = ((a & 0xFFFFFFFF) ^ 0x9E3779B9) & 0xFFFFFFFF;
+    x = (x + (b & 0xFFFFFFFF)) & 0xFFFFFFFF;
+    x ^= x >>> 16;
+    x = (x + ((x << 3) & 0xFFFFFFFF)) & 0xFFFFFFFF;
+    x ^= x >>> 13;
+    x = (x + ((x << 9) & 0xFFFFFFFF)) & 0xFFFFFFFF;
+    x ^= x >>> 7;
+    return x & 0x7FFFFFFF;
   }
 }

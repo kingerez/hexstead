@@ -8,6 +8,7 @@ import '../board/board_geometry.dart';
 import '../board/board_painter.dart';
 import '../board/board_widget.dart';
 import '../widgets/bandit_fly_overlay.dart';
+import '../widgets/card_fan_overlay.dart';
 import '../widgets/dice_roll_overlay.dart';
 import '../widgets/hand_sheet.dart';
 import '../widgets/production_overlay.dart';
@@ -43,7 +44,7 @@ class _GameScreenState extends State<GameScreen> {
   Completer<void>? _banditCompleter;
 
   /// Production payout being floated over the board right now.
-  (List<ProductionGrant>, List<int>)? _production;
+  (List<ProductionGrant>, String)? _production;
   Completer<void>? _productionCompleter;
 
   /// Board canvas size from the last layout, for overlay positioning.
@@ -79,10 +80,15 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
+  /// Card fan shown right after the welcome briefing.
+  bool _showCardFan = false;
+
   void _dismissWelcome() {
     setState(() {
       _showWelcome = false;
       _hudVisible = true;
+      final hand = state.players.firstWhere((p) => !p.isBot).hand;
+      _showCardFan = hand.isNotEmpty;
     });
   }
 
@@ -125,9 +131,17 @@ class _GameScreenState extends State<GameScreen> {
       final grants = [
         for (final e in events.whereType<ResourcesProduced>()) ...e.grants,
       ];
+      final numbers = chosen.first.activatedNumbers;
+      // Distinguish "the number isn't on the board" from "nobody owns it".
+      final numbersOnBoard = state.tiles.values
+          .any((t) => t.number != null && numbers.contains(t.number));
+      final label = numbers.toSet().join(' or ');
+      final emptyMessage = numbersOnBoard
+          ? 'No one owns a hex numbered $label yet'
+          : 'No hex is numbered $label';
       final completer = Completer<void>();
       setState(() {
-        _production = (grants, chosen.first.activatedNumbers);
+        _production = (grants, emptyMessage);
         _productionCompleter = completer;
       });
       await completer.future;
@@ -351,7 +365,7 @@ class _GameScreenState extends State<GameScreen> {
                               _production!.$1.length),
                           geometry: geometry,
                           grants: _production!.$1,
-                          activatedNumbers: _production!.$2,
+                          emptyMessage: _production!.$2,
                           onDone: _onProductionShown,
                         ),
                       if (_banditFlyTarget != null)
@@ -418,6 +432,11 @@ class _GameScreenState extends State<GameScreen> {
           ),
           if (_showWelcome)
             WelcomeOverlay(state: state, onStart: _dismissWelcome),
+          if (_showCardFan)
+            CardFanOverlay(
+              cardIds: state.players.firstWhere((p) => !p.isBot).hand,
+              onDone: () => setState(() => _showCardFan = false),
+            ),
         ],
       ),
     );

@@ -13,15 +13,15 @@ class ProductionOverlay extends StatefulWidget {
   final BoardGeometry geometry;
   final List<ProductionGrant> grants;
 
-  /// The activated numbers, shown when nothing produced.
-  final List<int> activatedNumbers;
+  /// Explanation shown when nothing produced.
+  final String emptyMessage;
   final VoidCallback onDone;
 
   const ProductionOverlay({
     super.key,
     required this.geometry,
     required this.grants,
-    required this.activatedNumbers,
+    required this.emptyMessage,
     required this.onDone,
   });
 
@@ -85,8 +85,7 @@ class _ProductionOverlayState extends State<ProductionOverlay>
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Text(
-                      'No hexes matched '
-                      '${widget.activatedNumbers.join(' & ')}',
+                      widget.emptyMessage,
                       style: const TextStyle(
                           color: Colors.white70, fontSize: 15),
                     ),
