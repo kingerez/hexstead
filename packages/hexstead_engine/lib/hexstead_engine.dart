@@ -14,3 +14,4 @@ export 'src/model/player.dart';
 export 'src/reducer.dart';
 export 'src/scoring.dart';
 export 'src/serialization.dart';
+export 'src/bot/bot.dart';

@@ -1,5 +1,5 @@
 name: hexstead
-description: "A new Flutter project."
+description: "Cozy medieval hex strategy: 5-minute dice battles vs AI rivals."
 publish_to: 'none'
 version: 0.1.0+1
 
@@ -9,6 +9,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  hexstead_engine:
+    path: packages/hexstead_engine
+  path_provider: ^2.1.4
+  shared_preferences: ^2.3.2
 
 dev_dependencies:
   flutter_test:
