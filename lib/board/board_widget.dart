@@ -10,6 +10,7 @@ class BoardWidget extends StatelessWidget {
   final Hex? selected;
   final void Function(Hex)? onTapHex;
   final void Function(Hex)? onLongPressHex;
+  final Hex? hideBanditAt;
 
   const BoardWidget({
     super.key,
@@ -18,6 +19,7 @@ class BoardWidget extends StatelessWidget {
     this.selected,
     this.onTapHex,
     this.onLongPressHex,
+    this.hideBanditAt,
   });
 
   @override
@@ -40,6 +42,7 @@ class BoardWidget extends StatelessWidget {
               state: state,
               highlighted: highlighted,
               selected: selected,
+              hideBanditAt: hideBanditAt,
             ),
           ),
         );

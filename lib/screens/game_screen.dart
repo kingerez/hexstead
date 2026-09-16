@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
 
+import '../board/board_geometry.dart';
 import '../board/board_painter.dart';
 import '../board/board_widget.dart';
+import '../widgets/bandit_fly_overlay.dart';
 import '../widgets/dice_roll_overlay.dart';
 import '../widgets/hand_sheet.dart';
 import '../widgets/tile_info_sheet.dart';
@@ -30,7 +32,15 @@ class _GameScreenState extends State<GameScreen> {
   /// Dice currently tumbling on screen; the game waits until they settle.
   (int, int)? _rollingDice;
   Duration _rollDuration = Duration.zero;
+  Duration _holdDuration = Duration.zero;
   Completer<void>? _rollCompleter;
+
+  /// Bandit fly-in target; the game waits until it lands.
+  Hex? _banditFlyTarget;
+  Completer<void>? _banditCompleter;
+
+  /// Board canvas size from the last layout, for overlay positioning.
+  Size _boardSize = Size.zero;
 
   GameController get controller => widget.controller;
   GameState get state => controller.state!;
@@ -51,21 +61,33 @@ class _GameScreenState extends State<GameScreen> {
     super.dispose();
   }
 
-  /// Awaited by the controller after every action: plays the dice-roll
-  /// animation for human and bot rolls alike.
+  /// Awaited by the controller after every action: plays presentation
+  /// animations (dice roll, bandit fly-in) for human and bot actions alike.
   Future<void> _presentEvents(List<GameEvent> events) async {
+    if (!mounted) return;
     final rolls = events.whereType<DiceRolled>();
-    if (rolls.isEmpty || !mounted) return;
-    final roll = rolls.first;
-    final completer = Completer<void>();
-    setState(() {
-      _rollingDice = (roll.d1, roll.d2);
-      _rollDuration = state.currentPlayer.isBot
-          ? const Duration(milliseconds: 1100)
-          : const Duration(milliseconds: 2000);
-      _rollCompleter = completer;
-    });
-    await completer.future;
+    if (rolls.isNotEmpty) {
+      final roll = rolls.first;
+      final isBot = state.currentPlayer.isBot;
+      final completer = Completer<void>();
+      setState(() {
+        _rollingDice = (roll.d1, roll.d2);
+        _rollDuration = Duration(milliseconds: isBot ? 800 : 1200);
+        _holdDuration = Duration(milliseconds: isBot ? 800 : 1500);
+        _rollCompleter = completer;
+      });
+      await completer.future;
+    }
+    if (!mounted) return;
+    final banditPlacements = events.whereType<BanditPlaced>();
+    if (banditPlacements.isNotEmpty && _boardSize != Size.zero) {
+      final completer = Completer<void>();
+      setState(() {
+        _banditFlyTarget = banditPlacements.first.target;
+        _banditCompleter = completer;
+      });
+      await completer.future;
+    }
   }
 
   void _onDiceSettled() {
@@ -74,6 +96,16 @@ class _GameScreenState extends State<GameScreen> {
       setState(() {
         _rollingDice = null;
         _rollCompleter = null;
+      });
+    }
+  }
+
+  void _onBanditLanded() {
+    _banditCompleter?.complete();
+    if (mounted) {
+      setState(() {
+        _banditFlyTarget = null;
+        _banditCompleter = null;
       });
     }
   }
@@ -174,30 +206,50 @@ class _GameScreenState extends State<GameScreen> {
           children: [
             _TopBar(state: state),
             Expanded(
-              child: Stack(
-                children: [
-                  BoardWidget(
-                    state: state,
-                    highlighted: _highlighted,
-                    selected: _selected,
-                    onTapHex: _onTapHex,
-                    onLongPressHex: (hex) => showModalBottomSheet<void>(
-                      context: context,
-                      builder: (_) =>
-                          TileInfoSheet(state: state, tile: state.tiles[hex]!),
-                    ),
-                  ),
-                  if (_rollingDice != null)
-                    Center(
-                      child: DiceRollOverlay(
-                        key: ValueKey(state.diceHistory.length),
-                        d1: _rollingDice!.$1,
-                        d2: _rollingDice!.$2,
-                        duration: _rollDuration,
-                        onDone: _onDiceSettled,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  _boardSize =
+                      Size(constraints.maxWidth, constraints.maxHeight);
+                  final geometry = BoardGeometry(_boardSize);
+                  return Stack(
+                    children: [
+                      BoardWidget(
+                        state: state,
+                        highlighted: _highlighted,
+                        selected: _selected,
+                        hideBanditAt: _banditFlyTarget,
+                        onTapHex: _onTapHex,
+                        onLongPressHex: (hex) => showModalBottomSheet<void>(
+                          context: context,
+                          builder: (_) => TileInfoSheet(
+                              state: state, tile: state.tiles[hex]!),
+                        ),
                       ),
-                    ),
-                ],
+                      if (_rollingDice != null)
+                        Center(
+                          child: DiceRollOverlay(
+                            key: ValueKey(state.diceHistory.length),
+                            d1: _rollingDice!.$1,
+                            d2: _rollingDice!.$2,
+                            rollDuration: _rollDuration,
+                            holdDuration: _holdDuration,
+                            flyOffset:
+                                Offset(0, constraints.maxHeight / 2 + 30),
+                            onDone: _onDiceSettled,
+                          ),
+                        ),
+                      if (_banditFlyTarget != null)
+                        BanditFlyOverlay(
+                          key: ValueKey(_banditFlyTarget),
+                          start: Offset(constraints.maxWidth / 2,
+                              constraints.maxHeight / 2),
+                          target: geometry.centerOf(_banditFlyTarget!),
+                          endSize: geometry.hexSize * 0.80,
+                          onDone: _onBanditLanded,
+                        ),
+                    ],
+                  );
+                },
               ),
             ),
             if (_pendingCardId != null)
@@ -446,8 +498,10 @@ class _Hud extends StatelessWidget {
           child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('🎲 $d1 + $d2  ',
-                style: const TextStyle(color: Colors.white, fontSize: 16)),
+            MiniDie(d1),
+            const SizedBox(width: 5),
+            MiniDie(d2),
+            const SizedBox(width: 12),
             FilledButton(
               onPressed: () =>
                   onAction(const ChooseActivation(ActivationMode.sum)),

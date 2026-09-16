@@ -10,10 +10,15 @@ class BoardPainter extends CustomPainter {
   final Set<Hex> highlighted;
   final Hex? selected;
 
+  /// Suppresses the painted bandit on this hex while its fly-in animation
+  /// is still in flight.
+  final Hex? hideBanditAt;
+
   const BoardPainter({
     required this.state,
     this.highlighted = const {},
     this.selected,
+    this.hideBanditAt,
   });
 
   static const terrainColors = {
@@ -141,8 +146,18 @@ class BoardPainter extends CustomPainter {
       );
     }
 
-    if (tile.hasBandit) {
-      _text(canvas, '🦹', center - Offset(0, hexSize * 0.02), hexSize * 0.62);
+    // A blocked hex (bandit or drought) is visibly "switched off": the whole
+    // tile dims so the resource icon recedes and the bandit stands out.
+    final blocked = tile.blockedUntilRound != null &&
+        state.round < tile.blockedUntilRound!;
+    if (tile.hasBandit || blocked) {
+      canvas.drawPath(
+        path,
+        Paint()..color = Colors.black.withValues(alpha: 0.45),
+      );
+    }
+    if (tile.hasBandit && tile.coord != hideBanditAt) {
+      _text(canvas, '🦹', center - Offset(0, hexSize * 0.02), hexSize * 0.80);
     }
   }
 
@@ -166,5 +181,6 @@ class BoardPainter extends CustomPainter {
   bool shouldRepaint(BoardPainter old) =>
       old.state != state ||
       old.highlighted != highlighted ||
-      old.selected != selected;
+      old.selected != selected ||
+      old.hideBanditAt != hideBanditAt;
 }

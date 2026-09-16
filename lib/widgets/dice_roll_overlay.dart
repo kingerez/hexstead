@@ -2,12 +2,18 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// Center-screen 2D dice roll: both faces cycle rapidly, decelerate, and
-/// settle on the actual rolled values, then call [onDone].
+/// Center-screen 2D dice roll in three phases:
+///  1. tumble — faces cycle rapidly and decelerate onto the real values
+///  2. hold — the settled result stays put so it can be read
+///  3. fly — the panel shrinks and glides down toward the HUD, then [onDone]
 class DiceRollOverlay extends StatefulWidget {
   final int d1;
   final int d2;
-  final Duration duration;
+  final Duration rollDuration;
+  final Duration holdDuration;
+
+  /// Where the panel flies to, relative to its centered start position.
+  final Offset flyOffset;
   final VoidCallback onDone;
 
   const DiceRollOverlay({
@@ -15,7 +21,9 @@ class DiceRollOverlay extends StatefulWidget {
     required this.d1,
     required this.d2,
     required this.onDone,
-    this.duration = const Duration(milliseconds: 2000),
+    required this.flyOffset,
+    this.rollDuration = const Duration(milliseconds: 1200),
+    this.holdDuration = const Duration(milliseconds: 1500),
   });
 
   @override
@@ -24,18 +32,16 @@ class DiceRollOverlay extends StatefulWidget {
 
 class _DiceRollOverlayState extends State<DiceRollOverlay>
     with SingleTickerProviderStateMixin {
-  // The tumble takes widget.duration; the settled result then holds on
-  // screen briefly before onDone. The hold lives INSIDE the animation so
-  // the whole sequence is frame-driven (no stray timers).
-  static const _settleHold = Duration(milliseconds: 400);
+  static const _flyDuration = Duration(milliseconds: 380);
+
+  late final int _totalMs = widget.rollDuration.inMilliseconds +
+      widget.holdDuration.inMilliseconds +
+      _flyDuration.inMilliseconds;
 
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: widget.duration + _settleHold,
+    duration: Duration(milliseconds: _totalMs),
   );
-
-  late final double _rollFraction = widget.duration.inMilliseconds /
-      (widget.duration + _settleHold).inMilliseconds;
 
   // Fixed shuffled sequences so the tumble looks random but is repeatable.
   static const _seqA = [3, 6, 1, 4, 2, 5];
@@ -56,73 +62,89 @@ class _DiceRollOverlayState extends State<DiceRollOverlay>
     super.dispose();
   }
 
-  int _face(List<int> seq, int finalFace, double t) {
-    final idx = (_swaps * Curves.decelerate.transform(t)).floor();
+  int _face(List<int> seq, int finalFace, double rollT) {
+    final idx = (_swaps * Curves.decelerate.transform(rollT)).floor();
     if (idx >= _swaps - 1) return finalFace;
     return seq[idx % seq.length];
   }
 
   @override
   Widget build(BuildContext context) {
+    final rollMs = widget.rollDuration.inMilliseconds;
+    final flyStartFraction = 1 - _flyDuration.inMilliseconds / _totalMs;
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
-        final t = (_controller.value / _rollFraction).clamp(0.0, 1.0);
-        final settled = t >= 1.0;
-        final scale = 1.0 + 0.12 * math.sin(math.pi * t);
-        return Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.35),
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Transform.scale(
-                scale: scale,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _die(_face(_seqA, widget.d1, t), t, phase: 0),
-                    const SizedBox(width: 20),
-                    _die(_face(_seqB, widget.d2, t), t, phase: 2.1),
-                  ],
-                ),
+        final elapsed = _controller.value * _totalMs;
+        final rollT = (elapsed / rollMs).clamp(0.0, 1.0);
+        final flyT = _controller.value <= flyStartFraction
+            ? 0.0
+            : Curves.easeInCubic.transform(
+                (_controller.value - flyStartFraction) /
+                    (1 - flyStartFraction));
+
+        final wobbleScale = 1.0 + 0.12 * math.sin(math.pi * rollT);
+        final flyScale = 1.0 - 0.65 * flyT;
+        return Transform.translate(
+          offset: widget.flyOffset * flyT,
+          child: Transform.scale(
+            scale: wobbleScale * flyScale,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 20, vertical: 16),
+              decoration: BoxDecoration(
+                color: Colors.black
+                    .withValues(alpha: 0.35 * (1 - flyT)),
+                borderRadius: BorderRadius.circular(20),
               ),
-              const SizedBox(height: 12),
-              Text(
-                settled ? '${widget.d1 + widget.d2}' : ' ',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _die(_face(_seqA, widget.d1, rollT), rollT, phase: 0),
+                  const SizedBox(width: 18),
+                  _die(_face(_seqB, widget.d2, rollT), rollT, phase: 2.1),
+                ],
               ),
-            ],
+            ),
           ),
         );
       },
     );
   }
 
-  Widget _die(int face, double t, {required double phase}) {
+  Widget _die(int face, double rollT, {required double phase}) {
     // Wobble that dies out as the roll settles.
-    final angle = (1 - t) * 0.28 * math.sin(t * 22 + phase);
+    final angle = (1 - rollT) * 0.28 * math.sin(rollT * 22 + phase);
     return Transform.rotate(
       angle: angle,
       child: CustomPaint(
-        size: const Size(72, 72),
-        painter: _DieFacePainter(face),
+        size: const Size(68, 68),
+        painter: DieFacePainter(face),
       ),
     );
   }
 }
 
-class _DieFacePainter extends CustomPainter {
+/// A small static die, used in the HUD to show the current roll.
+class MiniDie extends StatelessWidget {
+  final int face;
+  final double size;
+
+  const MiniDie(this.face, {super.key, this.size = 26});
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: Size.square(size),
+      painter: DieFacePainter(face),
+    );
+  }
+}
+
+class DieFacePainter extends CustomPainter {
   final int face;
 
-  const _DieFacePainter(this.face);
+  const DieFacePainter(this.face);
 
   static const _pipLayouts = {
     1: [(0.5, 0.5)],
@@ -147,7 +169,7 @@ class _DieFacePainter extends CustomPainter {
       Radius.circular(size.width * 0.2),
     );
     canvas.drawRRect(
-      rect.shift(const Offset(0, 3)),
+      rect.shift(Offset(0, size.width * 0.04)),
       Paint()..color = Colors.black.withValues(alpha: 0.3),
     );
     canvas.drawRRect(rect, Paint()..color = const Color(0xFFF7F1E1));
@@ -162,5 +184,5 @@ class _DieFacePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_DieFacePainter old) => old.face != face;
+  bool shouldRepaint(DieFacePainter old) => old.face != face;
 }
