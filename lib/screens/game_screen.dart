@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../board/board_geometry.dart';
 import '../board/board_painter.dart';
 import '../board/board_widget.dart';
+import '../widgets/adjust_die_dialog.dart';
 import '../widgets/bandit_fly_overlay.dart';
 import '../widgets/card_fan_overlay.dart';
 import '../widgets/dice_roll_overlay.dart';
@@ -138,10 +139,11 @@ class _GameScreenState extends State<GameScreen> {
     }
     if (cardId == 'omen' && options.length > 1) {
       final (d1, d2) = state.lastDice!;
-      await _pickOption('Shift a die', [
-        for (final o in options)
-          ('die ${o.dieIndex == 0 ? d1 : d2} ${o.delta! > 0 ? '+1' : '-1'}', o),
-      ]);
+      final action = await showDialog<PlayCard>(
+        context: context,
+        builder: (_) => AdjustDieDialog(d1: d1, d2: d2, options: options),
+      );
+      if (action != null) await _tryDispatch(action);
       return;
     }
     await _tryDispatch(options.first);
