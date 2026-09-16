@@ -3,12 +3,47 @@ import 'package:hexstead_engine/hexstead_engine.dart';
 
 import '../board/board_painter.dart';
 import '../state/game_controller.dart';
+import '../state/high_scores.dart';
 import 'setup_screen.dart';
 
-class GameOverScreen extends StatelessWidget {
+class GameOverScreen extends StatefulWidget {
   final GameController controller;
 
   const GameOverScreen({super.key, required this.controller});
+
+  @override
+  State<GameOverScreen> createState() => _GameOverScreenState();
+}
+
+class _GameOverScreenState extends State<GameOverScreen> {
+  bool? _newBest;
+  int _multipliedScore = 0;
+  double _multiplier = 1;
+
+  GameController get controller => widget.controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _recordScore();
+  }
+
+  Future<void> _recordScore() async {
+    final state = controller.state!;
+    final human = state.players.firstWhere((p) => !p.isBot);
+    final raw = finalScoreFor(state, human.id);
+    _multiplier = difficultyMultiplier(state.players);
+    _multipliedScore = (raw * _multiplier).round();
+    final bots = state.players.where((p) => p.isBot).toList();
+    final isBest = await HighScoreStore().record(ScoreEntry(
+      score: raw,
+      multiplier: _multiplier,
+      finalScore: _multipliedScore,
+      botSummary: '${bots.length} bots · ${bots.first.difficulty.name}',
+      date: DateTime.now(),
+    ));
+    if (mounted) setState(() => _newBest = isBest);
+  }
 
   /// One scoreboard row: final total plus the revealed secret objective.
   Widget _playerRow(GameState state, PlayerState p) {
@@ -82,7 +117,25 @@ class GameOverScreen extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               for (final p in ranked) _playerRow(state, p),
-              const SizedBox(height: 32),
+              const SizedBox(height: 18),
+              Text(
+                'Your score ×${_multiplier.toStringAsFixed(2)} difficulty '
+                '= $_multipliedScore',
+                style: const TextStyle(color: Colors.white70, fontSize: 14),
+              ),
+              if (_newBest == true)
+                const Padding(
+                  padding: EdgeInsets.only(top: 6),
+                  child: Text(
+                    '✨ New personal best!',
+                    style: TextStyle(
+                      color: Colors.amber,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 24),
               FilledButton(
                 onPressed: () => Navigator.of(context).pushReplacement(
                   MaterialPageRoute(

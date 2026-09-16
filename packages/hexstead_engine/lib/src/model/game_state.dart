@@ -18,9 +18,15 @@ abstract final class Rules {
   static const upgradeCost = {Resource.grain: 2, Resource.stone: 1};
   static const banditRemovalCount = 2;
   static const bankTradeRate = 3;
-  static const startingResources = {Resource.wood: 1, Resource.brick: 1};
-  static const defaultTargetVp = 25;
+  static const startingResources = {Resource.wood: 2, Resource.brick: 2};
+  static const defaultTargetVp = 15;
   static const defaultRoundCap = 15;
+
+  /// Later seats start with extra resources to offset first-mover advantage.
+  static Map<Resource, int> seatCompensation(int seatIndex) => {
+        if (seatIndex >= 1) Resource.grain: 1,
+        if (seatIndex >= 3) Resource.wood: 1,
+      };
 
   static Map<Resource, int> effectiveClaimCost(PlayerState player) =>
       player.hasLandmark('cheap_claims') ? {Resource.wood: 1} : claimCost;
@@ -114,7 +120,11 @@ class GameState {
             name: setup.name,
             isBot: setup.isBot,
             difficulty: setup.difficulty,
-            resources: Rules.startingResources,
+            resources: {
+              ...Rules.startingResources,
+              for (final e in Rules.seatCompensation(id).entries)
+                e.key: (Rules.startingResources[e.key] ?? 0) + e.value,
+            },
             hand: hands[id],
             objectiveId: objectivePool[id],
           ),

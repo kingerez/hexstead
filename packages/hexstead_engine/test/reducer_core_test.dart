@@ -74,7 +74,13 @@ void main() {
         expect(owned.length, 1);
         expect(owned.single.level, 1);
         expect(owned.single.number, isNotNull);
-        expect(p.resources, {Resource.wood: 1, Resource.brick: 1});
+        // Base stake plus seat compensation for going later.
+        expect(p.resources, {
+          Resource.wood: 2,
+          Resource.brick: 2,
+          if (p.id >= 1) Resource.grain: 1,
+          if (p.id >= 3) Resource.wood: 3,
+        });
       }
     });
 

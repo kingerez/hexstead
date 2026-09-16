@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
 
 import '../state/game_controller.dart';
+import '../state/high_scores.dart';
 import 'game_screen.dart';
 
 class SetupScreen extends StatefulWidget {
@@ -15,6 +16,7 @@ class SetupScreen extends StatefulWidget {
 
 class _SetupScreenState extends State<SetupScreen> {
   int _botCount = 2;
+  BotDifficulty _difficulty = BotDifficulty.medium;
 
   static const _botNames = ['Rosalind', 'Bertram', 'Wilhelmina'];
 
@@ -22,7 +24,7 @@ class _SetupScreenState extends State<SetupScreen> {
     final players = [
       const PlayerSetup(name: 'You', isBot: false),
       for (var i = 0; i < _botCount; i++)
-        PlayerSetup(name: _botNames[i], isBot: true),
+        PlayerSetup(name: _botNames[i], isBot: true, difficulty: _difficulty),
     ];
     final navigator = Navigator.of(context);
     await widget.controller.startNewGame(
@@ -61,6 +63,35 @@ class _SetupScreenState extends State<SetupScreen> {
               ],
               selected: {_botCount},
               onSelectionChanged: (s) => setState(() => _botCount = s.first),
+            ),
+            const SizedBox(height: 24),
+            const Text('Difficulty',
+                style: TextStyle(color: Colors.white70, fontSize: 16)),
+            const SizedBox(height: 12),
+            SegmentedButton<BotDifficulty>(
+              segments: const [
+                ButtonSegment(
+                    value: BotDifficulty.easy, label: Text('Easy')),
+                ButtonSegment(
+                    value: BotDifficulty.medium, label: Text('Fair')),
+                ButtonSegment(
+                    value: BotDifficulty.hard, label: Text('Cruel')),
+              ],
+              selected: {_difficulty},
+              onSelectionChanged: (s) =>
+                  setState(() => _difficulty = s.first),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Score ×${difficultyMultiplier([
+                for (var i = 0; i < _botCount; i++)
+                  PlayerState(
+                      id: i,
+                      name: '',
+                      isBot: true,
+                      difficulty: _difficulty),
+              ]).toStringAsFixed(2)}',
+              style: const TextStyle(color: Colors.amber, fontSize: 13),
             ),
             const SizedBox(height: 40),
             FilledButton(

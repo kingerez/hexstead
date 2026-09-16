@@ -83,7 +83,7 @@ class GameController extends ChangeNotifier {
         if (botStepDelay > Duration.zero) {
           await Future<void>.delayed(botStepDelay);
         }
-        final action = StubBot.chooseAction(_state!);
+        final action = SmartBot.chooseAction(_state!);
         final result = apply(_state!, action);
         _state = result.state;
         lastEvents = result.events;
