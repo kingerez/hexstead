@@ -17,6 +17,11 @@ class GameController extends ChangeNotifier {
   List<GameEvent> lastEvents = const [];
   bool _drivingBots = false;
 
+  /// Optional presentation hook, awaited after every applied action so the
+  /// UI can play animations (dice roll) before the game continues — this is
+  /// what makes bot turns wait for the on-screen dice to settle.
+  Future<void> Function(List<GameEvent> events)? eventDelegate;
+
   GameController({
     required this.saveStore,
     this.botStepDelay = const Duration(milliseconds: 500),
@@ -70,6 +75,7 @@ class GameController extends ChangeNotifier {
     lastEvents = result.events;
     await _persist();
     notifyListeners();
+    await eventDelegate?.call(result.events);
     await _driveBots();
   }
 
@@ -89,6 +95,7 @@ class GameController extends ChangeNotifier {
         lastEvents = result.events;
         await _persist();
         notifyListeners();
+        await eventDelegate?.call(result.events);
       }
     } finally {
       _drivingBots = false;

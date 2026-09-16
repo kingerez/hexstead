@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hexstead/board/board_widget.dart';
 import 'package:hexstead/screens/game_screen.dart';
+import 'package:hexstead/widgets/dice_roll_overlay.dart';
 import 'package:hexstead/widgets/tile_info_sheet.dart';
 import 'package:hexstead/state/game_controller.dart';
 import 'package:hexstead/state/persistence.dart';
@@ -105,5 +106,34 @@ void main() {
       find.textContaining(RegExp('Forest|Field|Hill|Mountain|Desert')),
       findsWidgets,
     );
+  });
+
+  testWidgets('rolling shows the dice animation, then the choice buttons',
+      (tester) async {
+    final controller = GameController(
+      saveStore: InMemorySaveStore(),
+      botStepDelay: Duration.zero,
+    );
+    await controller.startNewGame(seed: 11, players: const [
+      PlayerSetup(name: 'You', isBot: false),
+      PlayerSetup(name: 'Bot', isBot: true),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(home: GameScreen(controller: controller)),
+    );
+
+    await tester.tap(find.text('Roll the dice'));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // Mid-roll: overlay is up, choice buttons are hidden.
+    expect(find.byType(DiceRollOverlay), findsOneWidget);
+    expect(find.textContaining('Split'), findsNothing);
+
+    await tester.pumpAndSettle();
+
+    // Settled: overlay gone, the sum-or-split decision is on screen.
+    expect(find.byType(DiceRollOverlay), findsNothing);
+    expect(find.textContaining('Split'), findsOneWidget);
   });
 }

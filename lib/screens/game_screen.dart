@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
 
 import '../board/board_painter.dart';
 import '../board/board_widget.dart';
+import '../widgets/dice_roll_overlay.dart';
 import '../widgets/hand_sheet.dart';
 import '../widgets/tile_info_sheet.dart';
 import '../state/game_controller.dart';
@@ -24,6 +27,11 @@ class _GameScreenState extends State<GameScreen> {
   /// A card awaiting a tile tap (drought/charter/banish/brigand).
   String? _pendingCardId;
 
+  /// Dice currently tumbling on screen; the game waits until they settle.
+  (int, int)? _rollingDice;
+  Duration _rollDuration = Duration.zero;
+  Completer<void>? _rollCompleter;
+
   GameController get controller => widget.controller;
   GameState get state => controller.state!;
 
@@ -31,12 +39,43 @@ class _GameScreenState extends State<GameScreen> {
   void initState() {
     super.initState();
     controller.addListener(_onStateChanged);
+    controller.eventDelegate = _presentEvents;
   }
 
   @override
   void dispose() {
     controller.removeListener(_onStateChanged);
+    if (controller.eventDelegate == _presentEvents) {
+      controller.eventDelegate = null;
+    }
     super.dispose();
+  }
+
+  /// Awaited by the controller after every action: plays the dice-roll
+  /// animation for human and bot rolls alike.
+  Future<void> _presentEvents(List<GameEvent> events) async {
+    final rolls = events.whereType<DiceRolled>();
+    if (rolls.isEmpty || !mounted) return;
+    final roll = rolls.first;
+    final completer = Completer<void>();
+    setState(() {
+      _rollingDice = (roll.d1, roll.d2);
+      _rollDuration = state.currentPlayer.isBot
+          ? const Duration(milliseconds: 1100)
+          : const Duration(milliseconds: 2000);
+      _rollCompleter = completer;
+    });
+    await completer.future;
+  }
+
+  void _onDiceSettled() {
+    _rollCompleter?.complete();
+    if (mounted) {
+      setState(() {
+        _rollingDice = null;
+        _rollCompleter = null;
+      });
+    }
   }
 
   void _onStateChanged() {
@@ -135,16 +174,30 @@ class _GameScreenState extends State<GameScreen> {
           children: [
             _TopBar(state: state),
             Expanded(
-              child: BoardWidget(
-                state: state,
-                highlighted: _highlighted,
-                selected: _selected,
-                onTapHex: _onTapHex,
-                onLongPressHex: (hex) => showModalBottomSheet<void>(
-                  context: context,
-                  builder: (_) =>
-                      TileInfoSheet(state: state, tile: state.tiles[hex]!),
-                ),
+              child: Stack(
+                children: [
+                  BoardWidget(
+                    state: state,
+                    highlighted: _highlighted,
+                    selected: _selected,
+                    onTapHex: _onTapHex,
+                    onLongPressHex: (hex) => showModalBottomSheet<void>(
+                      context: context,
+                      builder: (_) =>
+                          TileInfoSheet(state: state, tile: state.tiles[hex]!),
+                    ),
+                  ),
+                  if (_rollingDice != null)
+                    Center(
+                      child: DiceRollOverlay(
+                        key: ValueKey(state.diceHistory.length),
+                        d1: _rollingDice!.$1,
+                        d2: _rollingDice!.$2,
+                        duration: _rollDuration,
+                        onDone: _onDiceSettled,
+                      ),
+                    ),
+                ],
               ),
             ),
             if (_pendingCardId != null)
@@ -170,6 +223,7 @@ class _GameScreenState extends State<GameScreen> {
               ),
             _Hud(
               controller: controller,
+              rolling: _rollingDice != null,
               onAction: _tryDispatch,
               onOpenCards: () => _openSheet(HandSheet(state: state)),
               onOpenLandmarks: () => _openSheet(LandmarkSheet(state: state)),
@@ -270,12 +324,14 @@ class _TopBar extends StatelessWidget {
 
 class _Hud extends StatelessWidget {
   final GameController controller;
+  final bool rolling;
   final Future<void> Function(GameAction) onAction;
   final VoidCallback onOpenCards;
   final VoidCallback onOpenLandmarks;
 
   const _Hud({
     required this.controller,
+    required this.rolling,
     required this.onAction,
     required this.onOpenCards,
     required this.onOpenLandmarks,
@@ -366,6 +422,9 @@ class _Hud extends StatelessWidget {
   }
 
   Widget _actionRow(BuildContext context, GameState state) {
+    if (rolling) {
+      return const Text('Rolling…', style: TextStyle(color: Colors.white54));
+    }
     if (!controller.isHumanTurn) {
       return Text(
         '${state.currentPlayer.name} is playing…',

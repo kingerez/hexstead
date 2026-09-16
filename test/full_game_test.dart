@@ -39,6 +39,9 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: GameScreen(controller: controller)),
     );
+    // Skip presentation animations: this test awaits dispatch() directly,
+    // and the dice animation would wait forever for un-pumped frames.
+    controller.eventDelegate = null;
 
     var guard = 0;
     while (controller.state!.phase != Phase.gameOver) {
