@@ -34,8 +34,8 @@ void main() {
       MaterialApp(home: GameScreen(controller: controller)),
     );
 
-    expect(find.text('Roll'), findsOneWidget);
-    await tester.tap(find.text('Roll'));
+    expect(find.text('Roll the dice'), findsOneWidget);
+    await tester.tap(find.text('Roll the dice'));
     await tester.pumpAndSettle();
 
     expect(controller.state!.phase, Phase.awaitingChoice);
@@ -65,7 +65,7 @@ void main() {
       MaterialApp(home: GameScreen(controller: controller)),
     );
 
-    await tester.tap(find.text('Roll'));
+    await tester.tap(find.text('Roll the dice'));
     await tester.pumpAndSettle();
     // resolve choice (avoid bandit branch by picking split)
     await tester.tap(find.textContaining('Split'));

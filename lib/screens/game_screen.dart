@@ -182,42 +182,81 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final current = state.currentPlayer;
+    final currentColor = BoardPainter.playerColors[current.id];
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Round ${state.round}/${state.roundCap}',
-            style: const TextStyle(color: Colors.white70, fontSize: 13),
-          ),
-          const Spacer(),
-          for (final p in state.players)
-            Padding(
-              padding: const EdgeInsets.only(left: 10),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.circle,
-                    size: 10,
-                    color: BoardPainter.playerColors[p.id],
-                  ),
-                  const SizedBox(width: 3),
-                  Text(
-                    '${scoreFor(state, p.id)}',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: state.currentPlayerIndex == p.id
-                          ? FontWeight.w800
-                          : FontWeight.w400,
+          Row(
+            children: [
+              Text(
+                'Round ${state.round}/${state.roundCap}',
+                style: const TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final p in state.players) _playerChip(p),
+                      ],
                     ),
                   ),
-                  if (state.currentPlayerIndex == p.id)
-                    const Text(' ◂',
-                        style: TextStyle(color: Colors.white70, fontSize: 11)),
-                ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          // Whose-turn banner in the active player's color.
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            decoration: BoxDecoration(
+              color: currentColor.withValues(alpha: 0.9),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              state.phase == Phase.gameOver
+                  ? 'Game over'
+                  : current.isBot
+                      ? '${current.name} is playing…'
+                      : 'Your turn',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
               ),
             ),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _playerChip(PlayerState p) {
+    final active = state.currentPlayerIndex == p.id;
+    final color = BoardPainter.playerColors[p.id];
+    return Container(
+      margin: const EdgeInsets.only(left: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: active ? color : Colors.transparent,
+        border: Border.all(color: color, width: 1.5),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        '${p.isBot ? p.name.substring(0, 1) : 'You'} ${scoreFor(state, p.id)}',
+        style: TextStyle(
+          color: active ? Colors.white : Colors.white70,
+          fontWeight: active ? FontWeight.w800 : FontWeight.w500,
+          fontSize: 13,
+        ),
       ),
     );
   }
@@ -312,7 +351,7 @@ class _Hud extends StatelessWidget {
             ),
           const SizedBox(height: 6),
           SizedBox(
-            height: 48,
+            height: 72,
             child: Center(child: _actionRow(context, state)),
           ),
         ],
@@ -332,7 +371,7 @@ class _Hud extends StatelessWidget {
         return FilledButton.icon(
           onPressed: () => onAction(const RollDice()),
           icon: const Text('🎲', style: TextStyle(fontSize: 20)),
-          label: const Text('Roll'),
+          label: const Text('Roll the dice'),
         );
       case Phase.awaitingChoice:
         final (d1, d2) = state.lastDice!;
@@ -366,24 +405,39 @@ class _Hud extends StatelessWidget {
       case Phase.main:
         final canRemoveBandit =
             legalActions(state).whereType<RemoveBandit>().isNotEmpty;
-        return FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (canRemoveBandit)
-                FilledButton.tonal(
-                  onPressed: () => onAction(
-                      legalActions(state).whereType<RemoveBandit>().first),
-                  child: const Text('Pay off bandit'),
-                ),
-              const SizedBox(width: 8),
-              FilledButton(
-                onPressed: () => onAction(const EndTurn()),
-                child: const Text('End Turn'),
+        final canBuild = legalActions(state)
+            .any((a) => a is ClaimHex || a is UpgradeHex);
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              canBuild
+                  ? 'Tap a glowing tile to claim or upgrade it'
+                  : 'Nothing affordable — end your turn',
+              style: const TextStyle(color: Colors.white54, fontSize: 12),
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (canRemoveBandit)
+                    FilledButton.tonal(
+                      onPressed: () => onAction(
+                          legalActions(state).whereType<RemoveBandit>().first),
+                      child: const Text('Pay off bandit'),
+                    ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: () => onAction(const EndTurn()),
+                    child: const Text('End Turn'),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         );
       case Phase.gameOver:
         return const SizedBox.shrink();
