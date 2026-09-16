@@ -350,13 +350,13 @@ class _GameScreenState extends State<GameScreen> {
         final canClaim = actions.any((a) => a is ClaimHex);
         final canUpgrade = actions.any((a) => a is UpgradeHex);
         if (canClaim && canUpgrade) {
-          return 'You can build - tap a glowing hex.';
+          return 'Claim a glowing hex, or upgrade yours to produce x2.';
         }
         if (canClaim) {
           return 'Claim a glowing hex for 1 wood + 1 brick.';
         }
         if (canUpgrade) {
-          return 'Tap the glowing camp to make it a village.';
+          return 'Upgrade a glowing hex you own - x2 output, more points.';
         }
         return 'Save up - big connected regions score big.';
       case Phase.gameOver:
