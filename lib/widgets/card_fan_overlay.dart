@@ -1,31 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
 
-enum CardFanMode {
-  /// Game-start reveal: display only, dismissed by the "Got it" button.
-  intro,
-
-  /// Opened from the HUD fan icon: cards can be played, closed by tapping
-  /// outside.
-  hand,
-}
-
 /// The hand as a centered fan of cards. Enters by scaling up from the HUD
-/// icon's corner, leaves by shrinking back down to it.
+/// fan icon, leaves by shrinking back to it. Tap outside to dismiss; each
+/// playable card carries its own Play button.
 class CardFanOverlay extends StatefulWidget {
   final List<String> cardIds;
-  final CardFanMode mode;
 
-  /// Card ids with at least one legal play right now (hand mode).
+  /// Card ids with at least one legal play right now.
   final Set<String> playableCardIds;
+
+  /// Where the fan shrinks to / grows from, relative to the fan's centered
+  /// position (i.e. icon center minus screen center).
+  final Offset flyOffset;
   final void Function(String cardId)? onPlay;
   final VoidCallback onDone;
 
   const CardFanOverlay({
     super.key,
     required this.cardIds,
-    required this.mode,
     required this.onDone,
+    required this.flyOffset,
     this.playableCardIds = const {},
     this.onPlay,
   });
@@ -68,42 +63,29 @@ class _CardFanOverlayState extends State<CardFanOverlay>
 
   @override
   Widget build(BuildContext context) {
-    final screen = MediaQuery.sizeOf(context);
     return AnimatedBuilder(
       animation: _fly,
       builder: (context, _) {
         final flyT = Curves.easeInOutCubic.transform(_fly.value);
         final settled = _fly.value == 0;
-        final offset =
-            Offset(-screen.width * 0.30, screen.height * 0.38) * flyT;
-        final scale = 1.0 - 0.75 * flyT;
 
         return Positioned.fill(
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: widget.mode == CardFanMode.hand && _playedCardId == null
-                ? () => _close()
-                : null,
+            onTap: _playedCardId == null ? () => _close() : null,
             child: Container(
               color: Colors.black.withValues(alpha: 0.5 * (1 - flyT)),
               alignment: Alignment.center,
               child: Transform.translate(
-                offset: offset,
+                offset: widget.flyOffset * flyT,
                 child: Transform.scale(
-                  scale: scale,
+                  scale: 1.0 - 0.78 * flyT,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Opacity(
                         opacity: (1 - flyT).clamp(0.0, 1.0),
-                        child: const Text(
-                          'Your cards',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
+                        child: const _OutlinedTitle('Your cards'),
                       ),
                       const SizedBox(height: 18),
                       if (widget.cardIds.isEmpty)
@@ -129,20 +111,6 @@ class _CardFanOverlayState extends State<CardFanOverlay>
                               ),
                           ],
                         ),
-                      const SizedBox(height: 22),
-                      if (widget.mode == CardFanMode.intro)
-                        Opacity(
-                          opacity: (1 - flyT).clamp(0.0, 1.0),
-                          child: FilledButton(
-                            onPressed: settled ? () => _close() : null,
-                            style: FilledButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 42, vertical: 13),
-                            ),
-                            child: const Text('Got it',
-                                style: TextStyle(fontSize: 16)),
-                          ),
-                        ),
                     ],
                   ),
                 ),
@@ -156,8 +124,7 @@ class _CardFanOverlayState extends State<CardFanOverlay>
 
   Widget _card(String id, bool settled) {
     final spec = cardCatalog[id]!;
-    final playable = widget.mode == CardFanMode.hand &&
-        widget.playableCardIds.contains(id);
+    final playable = widget.playableCardIds.contains(id);
     return Container(
       width: 108,
       height: 176,
@@ -193,30 +160,64 @@ class _CardFanOverlayState extends State<CardFanOverlay>
               style: const TextStyle(fontSize: 11, color: Color(0xFF5A4A34)),
             ),
           ),
-          if (widget.mode == CardFanMode.hand)
-            SizedBox(
-              width: double.infinity,
-              height: 30,
-              child: playable
-                  ? FilledButton(
-                      onPressed:
-                          settled ? () => _close(play: id) : null,
-                      style: FilledButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        textStyle: const TextStyle(fontSize: 12),
-                      ),
-                      child: const Text('Play'),
-                    )
-                  : const Center(
-                      child: Text(
-                        'not now',
-                        style: TextStyle(
-                            fontSize: 10, color: Color(0xFF9A8A6A)),
-                      ),
+          SizedBox(
+            width: double.infinity,
+            height: 30,
+            child: playable
+                ? FilledButton(
+                    onPressed: settled ? () => _close(play: id) : null,
+                    style: FilledButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      textStyle: const TextStyle(fontSize: 12),
                     ),
-            ),
+                    child: const Text('Play'),
+                  )
+                : const Center(
+                    child: Text(
+                      'not now',
+                      style:
+                          TextStyle(fontSize: 10, color: Color(0xFF9A8A6A)),
+                    ),
+                  ),
+          ),
         ],
       ),
+    );
+  }
+}
+
+/// White title with a dark stroke so it reads over any board colors.
+class _OutlinedTitle extends StatelessWidget {
+  final String text;
+
+  const _OutlinedTitle(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    const size = 24.0;
+    const weight = FontWeight.w800;
+    return Stack(
+      children: [
+        Text(
+          text,
+          style: TextStyle(
+            fontSize: size,
+            fontWeight: weight,
+            foreground: Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 5
+              ..color = Colors.black87,
+          ),
+        ),
+        Text(
+          text,
+          style: const TextStyle(
+            fontSize: size,
+            fontWeight: weight,
+            color: Colors.white,
+          ),
+        ),
+      ],
     );
   }
 }

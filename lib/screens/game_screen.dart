@@ -80,16 +80,36 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
-  /// Card fan state: intro reveal after the briefing, or opened from the
-  /// HUD fan icon.
-  CardFanMode? _cardFanMode;
+  /// Whether the card fan is on screen (game-start reveal or icon tap).
+  bool _cardFanOpen = false;
+
+  /// Anchors for the fan's fly-to-icon animation.
+  final GlobalKey _screenStackKey = GlobalKey();
+  final GlobalKey _cardIconKey = GlobalKey();
+
+  /// Icon center relative to screen center: where the fan shrinks to.
+  Offset _fanFlyOffset() {
+    final stackBox =
+        _screenStackKey.currentContext?.findRenderObject() as RenderBox?;
+    final iconBox =
+        _cardIconKey.currentContext?.findRenderObject() as RenderBox?;
+    if (stackBox == null || iconBox == null || !iconBox.hasSize) {
+      final size = MediaQuery.sizeOf(context);
+      return Offset(size.width * 0.18, size.height * 0.38);
+    }
+    final iconCenter = iconBox.localToGlobal(
+      iconBox.size.center(Offset.zero),
+      ancestor: stackBox,
+    );
+    return iconCenter - stackBox.size.center(Offset.zero);
+  }
 
   void _dismissWelcome() {
     setState(() {
       _showWelcome = false;
       _hudVisible = true;
       final hand = state.players.firstWhere((p) => !p.isBot).hand;
-      _cardFanMode = hand.isNotEmpty ? CardFanMode.intro : null;
+      _cardFanOpen = hand.isNotEmpty;
     });
   }
 
@@ -369,6 +389,7 @@ class _GameScreenState extends State<GameScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF2E4034),
       body: Stack(
+        key: _screenStackKey,
         children: [
           SafeArea(
         child: Column(
@@ -475,8 +496,8 @@ class _GameScreenState extends State<GameScreen> {
                 controller: controller,
                 rolling: _rollingDice != null,
                 onAction: _tryDispatch,
-                onOpenCards: () =>
-                    setState(() => _cardFanMode = CardFanMode.hand),
+                onOpenCards: () => setState(() => _cardFanOpen = true),
+                cardIconKey: _cardIconKey,
                 onOpenLandmarks: () =>
                     _openSheet(LandmarkSheet(state: state)),
               ),
@@ -486,10 +507,10 @@ class _GameScreenState extends State<GameScreen> {
           ),
           if (_showWelcome)
             WelcomeOverlay(state: state, onStart: _dismissWelcome),
-          if (_cardFanMode != null)
+          if (_cardFanOpen)
             CardFanOverlay(
-              mode: _cardFanMode!,
               cardIds: state.players.firstWhere((p) => !p.isBot).hand,
+              flyOffset: _fanFlyOffset(),
               playableCardIds: controller.isHumanTurn
                   ? legalActions(state)
                       .whereType<PlayCard>()
@@ -497,7 +518,7 @@ class _GameScreenState extends State<GameScreen> {
                       .toSet()
                   : const {},
               onPlay: _handleCardPlay,
-              onDone: () => setState(() => _cardFanMode = null),
+              onDone: () => setState(() => _cardFanOpen = false),
             ),
         ],
       ),
@@ -666,6 +687,7 @@ class _Hud extends StatelessWidget {
   final Future<void> Function(GameAction) onAction;
   final VoidCallback onOpenCards;
   final VoidCallback onOpenLandmarks;
+  final GlobalKey? cardIconKey;
 
   const _Hud({
     required this.controller,
@@ -673,6 +695,7 @@ class _Hud extends StatelessWidget {
     required this.onAction,
     required this.onOpenCards,
     required this.onOpenLandmarks,
+    this.cardIconKey,
   });
 
   static const resourceEmoji = {
@@ -718,6 +741,7 @@ class _Hud extends StatelessWidget {
                   const SizedBox(width: 8),
                   if (controller.isHumanTurn)
                     InkWell(
+                      key: cardIconKey,
                       onTap: onOpenCards,
                       borderRadius: BorderRadius.circular(8),
                       child: Padding(

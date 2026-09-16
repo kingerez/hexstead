@@ -29,7 +29,8 @@ Future<void> dismissWelcome(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 600));
   await tester.tap(find.text('Start'));
   await tester.pumpAndSettle();
-  await tester.tap(find.text('Got it'));
+  // The starting-hand fan dismisses with a tap anywhere outside the cards.
+  await tester.tapAt(const Offset(10, 100));
   await tester.pumpAndSettle();
 }
 
@@ -60,10 +61,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Welcome to Hexstead'), findsNothing);
 
-    // The starting hand is revealed and waits for explicit dismissal.
-    expect(find.text('Your cards'), findsOneWidget);
-    expect(find.text('Got it'), findsOneWidget);
-    await tester.tap(find.text('Got it'));
+    // The starting hand is revealed and waits for a dismissing tap.
+    expect(find.text('Your cards'), findsWidgets);
+    await tester.tapAt(const Offset(10, 100));
     await tester.pumpAndSettle();
     expect(find.text('Your cards'), findsNothing);
     expect(find.text('Roll the dice'), findsOneWidget);
@@ -87,7 +87,7 @@ void main() {
 
     await tester.tap(find.byType(CardFanIcon));
     await tester.pumpAndSettle();
-    expect(find.text('Your cards'), findsOneWidget);
+    expect(find.text('Your cards'), findsWidgets);
     // Cards show their names in the fan.
     final hand = controller.state!.players.first.hand;
     expect(find.text(cardCatalog[hand.first]!.name), findsOneWidget);
