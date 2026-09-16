@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../board/board_geometry.dart';
 import '../board/board_painter.dart';
@@ -10,6 +11,7 @@ import '../widgets/bandit_fly_overlay.dart';
 import '../widgets/dice_roll_overlay.dart';
 import '../widgets/hand_sheet.dart';
 import '../widgets/tile_info_sheet.dart';
+import '../widgets/welcome_card.dart';
 import '../state/game_controller.dart';
 import 'game_over_screen.dart';
 
@@ -42,6 +44,14 @@ class _GameScreenState extends State<GameScreen> {
   /// Board canvas size from the last layout, for overlay positioning.
   Size _boardSize = Size.zero;
 
+  /// Game-start briefing: card shows 500ms after the board appears; the
+  /// HUD stays tucked away until the player hits Start.
+  bool _showWelcome = false;
+  bool _hudVisible = true;
+
+  /// Contextual tip balloon, on by default, toggleable, persisted.
+  bool _tipsOn = true;
+
   GameController get controller => widget.controller;
   GameState get state => controller.state!;
 
@@ -50,6 +60,31 @@ class _GameScreenState extends State<GameScreen> {
     super.initState();
     controller.addListener(_onStateChanged);
     controller.eventDelegate = _presentEvents;
+    SharedPreferences.getInstance().then((prefs) {
+      if (mounted) setState(() => _tipsOn = prefs.getBool('tips_on') ?? true);
+    });
+    final fresh = state.round == 1 &&
+        state.diceHistory.isEmpty &&
+        controller.isHumanTurn;
+    if (fresh) {
+      _hudVisible = false;
+      Future<void>.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) setState(() => _showWelcome = true);
+      });
+    }
+  }
+
+  void _dismissWelcome() {
+    setState(() {
+      _showWelcome = false;
+      _hudVisible = true;
+    });
+  }
+
+  void _toggleTips() {
+    setState(() => _tipsOn = !_tipsOn);
+    SharedPreferences.getInstance()
+        .then((prefs) => prefs.setBool('tips_on', _tipsOn));
   }
 
   @override
@@ -197,14 +232,45 @@ class _GameScreenState extends State<GameScreen> {
     await _tryDispatch(action);
   }
 
+  /// One short sentence about the current moment; null hides the balloon.
+  String? _currentTip() {
+    if (_rollingDice != null || _banditFlyTarget != null) return null;
+    if (_pendingCardId != null) return null;
+    if (!controller.isHumanTurn) {
+      return 'Rival rolls pay you too — your hexes always earn.';
+    }
+    switch (state.phase) {
+      case Phase.awaitingRoll:
+        return 'Roll — every hex matching the dice pays its owner.';
+      case Phase.awaitingChoice:
+        final (d1, d2) = state.lastDice!;
+        return d1 + d2 == 7
+            ? 'Sum is 7: unleash the bandit, or split instead.'
+            : 'Activate the sum, or each die on its own.';
+      case Phase.awaitingBandit:
+        return 'Drop the bandit on a rival hex to block it.';
+      case Phase.main:
+        return 'Grow one connected region — big regions score big.';
+      case Phase.gameOver:
+        return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF2E4034),
-      body: SafeArea(
+      body: Stack(
+        children: [
+          SafeArea(
         child: Column(
           children: [
             _TopBar(state: state),
+            _TipBar(
+              tipsOn: _tipsOn,
+              tip: _currentTip(),
+              onToggle: _toggleTips,
+            ),
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
@@ -284,13 +350,91 @@ class _GameScreenState extends State<GameScreen> {
                 },
               ),
             ),
-            _Hud(
-              controller: controller,
-              rolling: _rollingDice != null,
-              onAction: _tryDispatch,
-              onOpenCards: () => _openSheet(HandSheet(state: state)),
-              onOpenLandmarks: () => _openSheet(LandmarkSheet(state: state)),
+            AnimatedSlide(
+              offset: _hudVisible ? Offset.zero : const Offset(0, 1.1),
+              duration: const Duration(milliseconds: 450),
+              curve: Curves.easeOutCubic,
+              child: _Hud(
+                controller: controller,
+                rolling: _rollingDice != null,
+                onAction: _tryDispatch,
+                onOpenCards: () => _openSheet(HandSheet(state: state)),
+                onOpenLandmarks: () =>
+                    _openSheet(LandmarkSheet(state: state)),
+              ),
             ),
+          ],
+        ),
+          ),
+          if (_showWelcome)
+            WelcomeOverlay(state: state, onStart: _dismissWelcome),
+        ],
+      ),
+    );
+  }
+}
+
+/// Fixed-height strip under the turn banner: a lightbulb toggle plus a
+/// short balloon explaining what is going on right now.
+class _TipBar extends StatelessWidget {
+  final bool tipsOn;
+  final String? tip;
+  final VoidCallback onToggle;
+
+  const _TipBar({
+    required this.tipsOn,
+    required this.tip,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 36,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          children: [
+            InkWell(
+              onTap: onToggle,
+              borderRadius: BorderRadius.circular(15),
+              child: Container(
+                width: 30,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: tipsOn
+                      ? Colors.amber.withValues(alpha: 0.25)
+                      : Colors.white.withValues(alpha: 0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.lightbulb,
+                  size: 17,
+                  color: tipsOn ? Colors.amber : Colors.white38,
+                ),
+              ),
+            ),
+            if (tipsOn && tip != null) ...[
+              const SizedBox(width: 8),
+              Flexible(
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    tip!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        color: Colors.white70, fontSize: 12),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -473,9 +617,8 @@ class _Hud extends StatelessWidget {
               child: Text(
                 human.objectiveId == null
                     ? ''
-                    : '🎯 ${objectiveCatalog[human.objectiveId]!.name}: '
-                        '${objectiveCatalog[human.objectiveId]!.description}'
-                        ' (+${objectiveCatalog[human.objectiveId]!.bonusVp}, secret)',
+                    : '🎯 ${objectiveCatalog[human.objectiveId]!.description}'
+                        ' · +${objectiveCatalog[human.objectiveId]!.bonusVp} at game end',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(color: Colors.white38, fontSize: 11),

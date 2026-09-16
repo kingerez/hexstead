@@ -7,6 +7,7 @@ import 'package:hexstead/widgets/tile_info_sheet.dart';
 import 'package:hexstead/state/game_controller.dart';
 import 'package:hexstead/state/persistence.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class InMemorySaveStore implements SaveStore {
   String? saved;
@@ -21,9 +22,46 @@ class InMemorySaveStore implements SaveStore {
   Future<void> clear() async => saved = null;
 }
 
+/// Fresh games show the welcome briefing after 500ms; dismiss it so the
+/// HUD slides in and play can start.
+Future<void> dismissWelcome(WidgetTester tester) async {
+  await tester.pump(const Duration(milliseconds: 600));
+  await tester.tap(find.text('Start'));
+  await tester.pumpAndSettle();
+}
+
 void main() {
+  testWidgets('welcome card briefs the secret goal, Start reveals the HUD',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final controller = GameController(
+      saveStore: InMemorySaveStore(),
+      botStepDelay: Duration.zero,
+    );
+    await controller.startNewGame(seed: 12, players: const [
+      PlayerSetup(name: 'You', isBot: false),
+      PlayerSetup(name: 'Bot', isBot: true),
+    ]);
+    await tester.pumpWidget(
+      MaterialApp(home: GameScreen(controller: controller)),
+    );
+
+    // Board first, briefing after the 500ms beat.
+    expect(find.text('Welcome to Hexstead'), findsNothing);
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.text('Welcome to Hexstead'), findsOneWidget);
+    expect(find.textContaining('Your secret goal'), findsOneWidget);
+    expect(find.textContaining('bonus points at game end'), findsOneWidget);
+
+    await tester.tap(find.text('Start'));
+    await tester.pumpAndSettle();
+    expect(find.text('Welcome to Hexstead'), findsNothing);
+    expect(find.text('Roll the dice'), findsOneWidget);
+  });
+
   testWidgets('roll button rolls, choice buttons appear, sum resolves',
       (tester) async {
+    SharedPreferences.setMockInitialValues({});
     final controller = GameController(
       saveStore: InMemorySaveStore(),
       botStepDelay: Duration.zero,
@@ -36,6 +74,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: GameScreen(controller: controller)),
     );
+    await dismissWelcome(tester);
 
     expect(find.text('Roll the dice'), findsOneWidget);
     await tester.tap(find.text('Roll the dice'));
@@ -55,6 +94,7 @@ void main() {
   });
 
   testWidgets('End Turn hands control to the bot and returns', (tester) async {
+    SharedPreferences.setMockInitialValues({});
     final controller = GameController(
       saveStore: InMemorySaveStore(),
       botStepDelay: Duration.zero,
@@ -67,6 +107,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: GameScreen(controller: controller)),
     );
+    await dismissWelcome(tester);
 
     await tester.tap(find.text('Roll the dice'));
     await tester.pumpAndSettle();
@@ -82,6 +123,7 @@ void main() {
 
   testWidgets('long-pressing a tile opens the tile info sheet',
       (tester) async {
+    SharedPreferences.setMockInitialValues({});
     final controller = GameController(
       saveStore: InMemorySaveStore(),
       botStepDelay: Duration.zero,
@@ -95,6 +137,7 @@ void main() {
       MaterialApp(home: GameScreen(controller: controller)),
     );
 
+    await dismissWelcome(tester);
     // Long-press the board's center (the middle hex always exists).
     final board = find.byType(BoardWidget);
     await tester.longPress(board);
@@ -110,6 +153,7 @@ void main() {
 
   testWidgets('rolling shows the dice animation, then the choice buttons',
       (tester) async {
+    SharedPreferences.setMockInitialValues({});
     final controller = GameController(
       saveStore: InMemorySaveStore(),
       botStepDelay: Duration.zero,
@@ -123,6 +167,7 @@ void main() {
       MaterialApp(home: GameScreen(controller: controller)),
     );
 
+    await dismissWelcome(tester);
     await tester.tap(find.text('Roll the dice'));
     await tester.pump(const Duration(milliseconds: 300));
 
