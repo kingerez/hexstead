@@ -9,6 +9,7 @@ class BoardWidget extends StatelessWidget {
   final Set<Hex> highlighted;
   final Hex? selected;
   final void Function(Hex)? onTapHex;
+  final void Function(Hex)? onLongPressHex;
 
   const BoardWidget({
     super.key,
@@ -16,6 +17,7 @@ class BoardWidget extends StatelessWidget {
     this.highlighted = const {},
     this.selected,
     this.onTapHex,
+    this.onLongPressHex,
   });
 
   @override
@@ -27,6 +29,10 @@ class BoardWidget extends StatelessWidget {
           onTapUp: (details) {
             final hex = BoardGeometry(size).hexAt(details.localPosition);
             if (state.tiles.containsKey(hex)) onTapHex?.call(hex);
+          },
+          onLongPressStart: (details) {
+            final hex = BoardGeometry(size).hexAt(details.localPosition);
+            if (state.tiles.containsKey(hex)) onLongPressHex?.call(hex);
           },
           child: CustomPaint(
             size: size,

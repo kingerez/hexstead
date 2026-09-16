@@ -4,6 +4,7 @@ import 'package:hexstead_engine/hexstead_engine.dart';
 import '../board/board_painter.dart';
 import '../board/board_widget.dart';
 import '../widgets/hand_sheet.dart';
+import '../widgets/tile_info_sheet.dart';
 import '../state/game_controller.dart';
 import 'game_over_screen.dart';
 
@@ -139,6 +140,11 @@ class _GameScreenState extends State<GameScreen> {
                 highlighted: _highlighted,
                 selected: _selected,
                 onTapHex: _onTapHex,
+                onLongPressHex: (hex) => showModalBottomSheet<void>(
+                  context: context,
+                  builder: (_) =>
+                      TileInfoSheet(state: state, tile: state.tiles[hex]!),
+                ),
               ),
             ),
             if (_pendingCardId != null)

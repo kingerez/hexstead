@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hexstead/board/board_widget.dart';
 import 'package:hexstead/screens/game_screen.dart';
+import 'package:hexstead/widgets/tile_info_sheet.dart';
 import 'package:hexstead/state/game_controller.dart';
 import 'package:hexstead/state/persistence.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
@@ -75,5 +77,33 @@ void main() {
 
     expect(controller.state!.round, 2);
     expect(controller.isHumanTurn, isTrue);
+  });
+
+  testWidgets('long-pressing a tile opens the tile info sheet',
+      (tester) async {
+    final controller = GameController(
+      saveStore: InMemorySaveStore(),
+      botStepDelay: Duration.zero,
+    );
+    await controller.startNewGame(seed: 10, players: const [
+      PlayerSetup(name: 'You', isBot: false),
+      PlayerSetup(name: 'Bot', isBot: true),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(home: GameScreen(controller: controller)),
+    );
+
+    // Long-press the board's center (the middle hex always exists).
+    final board = find.byType(BoardWidget);
+    await tester.longPress(board);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TileInfoSheet), findsOneWidget);
+    // Sheet names the terrain and explains ownership or claimability.
+    expect(
+      find.textContaining(RegExp('Forest|Field|Hill|Mountain|Desert')),
+      findsWidgets,
+    );
   });
 }
