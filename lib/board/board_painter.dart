@@ -92,45 +92,53 @@ class BoardPainter extends CustomPainter {
     _text(canvas, terrainEmoji[tile.terrain]!,
         center - Offset(0, hexSize * 0.14), hexSize * 0.95);
 
-    // Number token tucked at the bottom; 6/8 are the frequent rolls, in red.
+    // Number token at the bottom. Ownership lives in the token itself:
+    // owner-colored disc with white text; unowned stays cream with the
+    // classic red 6/8. A village (x2 production) gets a double ring.
     final number = tile.number;
     if (number != null) {
       final tokenCenter = center + Offset(0, hexSize * 0.58);
       final hot = number == 6 || number == 8;
+      final owned = tile.ownerId != null;
       canvas.drawCircle(
         tokenCenter,
         hexSize * 0.26,
-        Paint()..color = const Color(0xFFF4EAD4),
+        Paint()
+          ..color =
+              owned ? playerColors[tile.ownerId!] : const Color(0xFFF4EAD4),
       );
+      if (owned) {
+        canvas.drawCircle(
+          tokenCenter,
+          hexSize * 0.26,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2
+            ..color = Colors.white,
+        );
+        if (tile.level >= 2) {
+          canvas.drawCircle(
+            tokenCenter,
+            hexSize * 0.34,
+            Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 2
+              ..color = Colors.white,
+          );
+        }
+      }
       _text(
         canvas,
         '$number',
         tokenCenter,
         hexSize * 0.32,
-        color: hot ? const Color(0xFFB33D3D) : const Color(0xFF4A3B28),
+        color: owned
+            ? Colors.white
+            : hot
+                ? const Color(0xFFB33D3D)
+                : const Color(0xFF4A3B28),
         bold: hot,
       );
-    }
-
-    // Building badge on a disc of the OWNER's color, so the tent/village
-    // reads as "this player's settlement", not just decoration.
-    if (tile.level >= 1 && tile.ownerId != null) {
-      final badgeCenter = center + Offset(-hexSize * 0.52, hexSize * 0.52);
-      canvas.drawCircle(
-        badgeCenter,
-        hexSize * 0.26,
-        Paint()..color = playerColors[tile.ownerId!],
-      );
-      canvas.drawCircle(
-        badgeCenter,
-        hexSize * 0.26,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5
-          ..color = Colors.white,
-      );
-      _text(canvas, tile.level == 1 ? '⛺' : '🏘️', badgeCenter,
-          hexSize * (tile.level == 1 ? 0.30 : 0.34));
     }
 
     if (tile.hasBandit) {

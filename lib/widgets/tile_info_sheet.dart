@@ -109,7 +109,7 @@ class TileInfoSheet extends StatelessWidget {
                         Flexible(
                           child: Text(
                             '${owner.isBot ? owner.name : 'Yours'} — '
-                            '${tile.level == 1 ? '⛺ camp (upgrade: 🌾2 🪨1)' : '🏘️ village'}',
+                            '${tile.level == 1 ? 'camp (upgrade to village: 🌾2 🪨1)' : 'village — ×2 production (double ring)'}',
                           ),
                         ),
                       ],
