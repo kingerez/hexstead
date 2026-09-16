@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import 'screens/menu_screen.dart';
@@ -27,18 +29,57 @@ class HexsteadApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      // Phone-shaped frame: on wide screens (desktop web) the game stays a
-      // centered portrait column instead of stretching across the monitor.
-      builder: (context, child) => ColoredBox(
-        color: const Color(0xFF1B231D),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
-            child: child!,
-          ),
-        ),
-      ),
+      // Phone-shaped frame: on wide screens (desktop web) the game runs in
+      // a centered portrait "device" with phone dimensions; on real phones
+      // it fills the screen as usual.
+      builder: (context, child) => _PhoneFrame(child: child!),
       home: MenuScreen(controller: controller),
+    );
+  }
+}
+
+/// On windows wider than a phone, letterboxes the app into a centered
+/// portrait frame with real phone proportions (iPhone-ish 9:19.5), rounded
+/// corners, and a bezel. MediaQuery is overridden to the frame size so all
+/// in-app layout math sees phone dimensions.
+class _PhoneFrame extends StatelessWidget {
+  final Widget child;
+
+  const _PhoneFrame({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth <= 520) return child;
+        const aspect = 9 / 19.5;
+        final height =
+            math.min(constraints.maxHeight - 32, 900.0);
+        final width = math.min(430.0, height * aspect);
+        final frameHeight = width / aspect;
+        return ColoredBox(
+          color: const Color(0xFF141A16),
+          child: Center(
+            child: Container(
+              width: width,
+              height: frameHeight,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(36),
+                border: Border.all(color: const Color(0xFF3A463C), width: 6),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black54, blurRadius: 40),
+                ],
+              ),
+              child: MediaQuery(
+                data: MediaQuery.of(context)
+                    .copyWith(size: Size(width, frameHeight)),
+                child: child,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
