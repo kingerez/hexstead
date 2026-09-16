@@ -638,12 +638,12 @@ class _Hud extends StatelessWidget {
                   if (controller.isHumanTurn)
                     TextButton(
                       onPressed: onOpenCards,
-                      child: Text('🎴 ${human.hand.length}'),
+                      child: Text('🎴 Cards (${human.hand.length})'),
                     ),
                   if (controller.isHumanTurn && state.phase == Phase.main)
                     TextButton(
                       onPressed: onOpenLandmarks,
-                      child: Text('🏛 ${state.landmarkOffer.length}'),
+                      child: Text('🏛 Shop (${state.landmarkOffer.length})'),
                     ),
                   if (controller.isHumanTurn &&
                       state.phase == Phase.main &&
