@@ -92,6 +92,13 @@ class ResourceStolen extends GameEvent {
   const ResourceStolen(this.fromPlayer, this.toPlayer, this.resource);
 }
 
+class LandmarkIncome extends GameEvent {
+  final int playerId;
+  final Resource resource;
+
+  const LandmarkIncome(this.playerId, this.resource);
+}
+
 class TurnEnded extends GameEvent {
   final int nextPlayerIndex;
 

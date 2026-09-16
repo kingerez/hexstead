@@ -48,6 +48,8 @@ class PlayerState {
 
   int countOf(Resource r) => resources[r] ?? 0;
 
+  bool hasLandmark(String id) => landmarkIds.contains(id);
+
   int get totalResources =>
       resources.values.fold(0, (sum, count) => sum + count);
 

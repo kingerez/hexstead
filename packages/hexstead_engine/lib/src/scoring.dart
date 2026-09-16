@@ -1,5 +1,6 @@
 import 'hex/hex.dart';
 import 'model/game_state.dart';
+import 'model/landmarks.dart';
 import 'model/tile.dart';
 
 /// A player's live score: region-multiplier territory score plus landmark
@@ -45,4 +46,16 @@ int territoryScore(GameState state, int playerId) {
   return total;
 }
 
-int landmarkScore(GameState state, int playerId) => 0;
+int landmarkScore(GameState state, int playerId) {
+  final player = state.players[playerId];
+  var score = 0;
+  for (final id in player.landmarkIds) {
+    score += landmarkCatalog[id]!.vp;
+  }
+  if (player.hasLandmark('keep')) {
+    score += state.tiles.values
+        .where((t) => t.ownerId == playerId && t.level >= 2)
+        .length;
+  }
+  return score;
+}

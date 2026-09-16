@@ -121,17 +121,35 @@ class PlayCard extends GameAction {
   final Hex? targetHex;
   final int? targetPlayer;
 
-  const PlayCard(this.cardId, {this.targetHex, this.targetPlayer});
+  /// For 'omen': which die (0 or 1) and shift (+1 or -1).
+  final int? dieIndex;
+  final int? delta;
+
+  /// For 'bounty': which resource to take.
+  final Resource? resource;
+
+  const PlayCard(
+    this.cardId, {
+    this.targetHex,
+    this.targetPlayer,
+    this.dieIndex,
+    this.delta,
+    this.resource,
+  });
 
   @override
   bool operator ==(Object other) =>
       other is PlayCard &&
       other.cardId == cardId &&
       other.targetHex == targetHex &&
-      other.targetPlayer == targetPlayer;
+      other.targetPlayer == targetPlayer &&
+      other.dieIndex == dieIndex &&
+      other.delta == delta &&
+      other.resource == resource;
 
   @override
-  int get hashCode => Object.hash(PlayCard, cardId, targetHex, targetPlayer);
+  int get hashCode => Object.hash(
+      PlayCard, cardId, targetHex, targetPlayer, dieIndex, delta, resource);
 }
 
 class EndTurn extends GameAction {

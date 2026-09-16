@@ -2,7 +2,10 @@ import 'actions.dart';
 import 'events.dart';
 import 'hex/hex.dart';
 import 'model/game_state.dart';
+import 'model/cards.dart';
+import 'model/landmarks.dart';
 import 'model/terrain.dart';
+import 'model/tile.dart';
 import 'scoring.dart';
 
 class IllegalActionException implements Exception {
@@ -35,8 +38,8 @@ ApplyResult apply(GameState state, GameAction action) {
     ClaimHex(:final target) => _claim(state, target),
     UpgradeHex(:final target) => _upgrade(state, target),
     BankTrade(:final give, :final get) => _bankTrade(state, give, get),
-    BuyLandmark() => throw IllegalActionException('landmarks not in play yet'),
-    PlayCard() => throw IllegalActionException('cards not in play yet'),
+    BuyLandmark(:final landmarkId) => _buyLandmark(state, landmarkId),
+    PlayCard() => _playCard(state, action),
     EndTurn() => _endTurn(state),
   };
 }
@@ -45,12 +48,20 @@ ApplyResult _rollDice(GameState state) {
   _requirePhase(state, Phase.awaitingRoll, 'roll');
   final d1 = state.rng.rollDie();
   final d2 = state.rng.rollDie();
-  final next = state.copyWith(
+  var next = state.copyWith(
     phase: Phase.awaitingChoice,
     lastDice: () => (d1, d2),
     diceHistory: [...state.diceHistory, (d1, d2)],
   );
-  return ApplyResult(next, [DiceRolled(d1, d2)]);
+  final events = <GameEvent>[DiceRolled(d1, d2)];
+  if (next.currentPlayer.hasLandmark('market_hall')) {
+    next = next.withPlayer(
+      next.currentPlayerIndex,
+      (p) => p.copyWith(resources: p.resourcesApplying({Resource.grain: 1})),
+    );
+    events.add(LandmarkIncome(next.currentPlayerIndex, Resource.grain));
+  }
+  return ApplyResult(next, events);
 }
 
 ApplyResult _chooseActivation(GameState state, ActivationMode mode) {
@@ -79,7 +90,7 @@ ApplyResult _chooseActivation(GameState state, ActivationMode mode) {
     final hits = activated.where((n) => n == tile.number).length;
     if (hits == 0) continue;
     final resource = tile.terrain.resource!;
-    final count = hits * tile.level;
+    final count = _productionCount(state, tile, hits);
     grants.add((
       hex: tile.coord,
       playerId: tile.ownerId!,
@@ -97,12 +108,41 @@ ApplyResult _chooseActivation(GameState state, ActivationMode mode) {
   return ApplyResult(next.copyWith(phase: Phase.main), events);
 }
 
+/// Yield for one producing tile, including landmark modifiers.
+int _productionCount(GameState state, Tile tile, int hits) {
+  final owner = state.players[tile.ownerId!];
+  var perHit = tile.level;
+  if (owner.hasLandmark(terrainBoostLandmarks[tile.terrain] ?? '')) {
+    perHit += 1;
+  }
+  var count = hits * perHit;
+  if (owner.hasLandmark('high_roller') && (tile.number ?? 0) >= 9) {
+    count *= 2;
+  }
+  return count;
+}
+
+void _requireBanditAllowed(GameState state, Tile tile) {
+  if (tile.ownerId != null &&
+      state.players[tile.ownerId!].hasLandmark('bandit_ward')) {
+    throw IllegalActionException('those lands are warded against the bandit');
+  }
+}
+
+void _requireCardTargetable(GameState state, int actorId, int targetId) {
+  if (targetId != actorId &&
+      state.players[targetId].hasLandmark('watchtower')) {
+    throw IllegalActionException('the watchtower blocks your card');
+  }
+}
+
 ApplyResult _placeBandit(GameState state, Hex target) {
   _requirePhase(state, Phase.awaitingBandit, 'place bandit');
   final tile = state.tiles[target];
   if (tile == null || tile.ownerId == null) {
     throw IllegalActionException('bandit must target an owned tile');
   }
+  _requireBanditAllowed(state, tile);
   final tiles = {
     for (final t in state.tiles.values)
       t.coord: t.coord == target
@@ -157,14 +197,15 @@ ApplyResult _claim(GameState state, Hex target) {
   if (!adjacent) {
     throw IllegalActionException('claim must border your territory');
   }
-  if (!player.canAfford(Rules.claimCost)) {
+  final cost = Rules.effectiveClaimCost(player);
+  if (!player.canAfford(cost)) {
     throw IllegalActionException('cannot afford claim');
   }
   var next = state.withPlayer(
     player.id,
     (p) => p.copyWith(
-        resources: p.resourcesApplying(
-            Rules.claimCost.map((k, v) => MapEntry(k, -v)))),
+        resources:
+            p.resourcesApplying(cost.map((k, v) => MapEntry(k, -v)))),
   );
   next = next.copyWith(tiles: {
     ...next.tiles,
@@ -205,7 +246,7 @@ ApplyResult _bankTrade(GameState state, Resource give, Resource get) {
   _requirePhase(state, Phase.main, 'trade');
   final player = state.currentPlayer;
   if (give == get) throw IllegalActionException('pointless trade');
-  final rate = Rules.bankTradeRate;
+  final rate = Rules.effectiveTradeRate(player);
   if (player.countOf(give) < rate) {
     throw IllegalActionException('need $rate ${give.name} to trade');
   }
@@ -214,6 +255,236 @@ ApplyResult _bankTrade(GameState state, Resource give, Resource get) {
     (p) => p.copyWith(resources: p.resourcesApplying({give: -rate, get: 1})),
   );
   return ApplyResult(next, [TradeCompleted(player.id, give, get)]);
+}
+
+ApplyResult _buyLandmark(GameState state, String landmarkId) {
+  _requirePhase(state, Phase.main, 'buy landmark');
+  final spec = landmarkCatalog[landmarkId];
+  if (spec == null || !state.landmarkOffer.contains(landmarkId)) {
+    throw IllegalActionException('landmark not available');
+  }
+  final player = state.currentPlayer;
+  if (!player.canAfford(spec.cost)) {
+    throw IllegalActionException('cannot afford ${spec.name}');
+  }
+  var next = state.withPlayer(
+    player.id,
+    (p) => p.copyWith(
+      resources:
+          p.resourcesApplying(spec.cost.map((k, v) => MapEntry(k, -v))),
+      landmarkIds: [...p.landmarkIds, landmarkId],
+    ),
+  );
+  next = next.copyWith(
+    landmarkOffer:
+        next.landmarkOffer.where((id) => id != landmarkId).toList(),
+  );
+  final events = <GameEvent>[LandmarkPurchased(landmarkId, player.id)];
+  return _checkInstantWin(next, events);
+}
+
+ApplyResult _playCard(GameState state, PlayCard action) {
+  final player = state.currentPlayer;
+  final spec = cardCatalog[action.cardId];
+  if (spec == null) throw IllegalActionException('unknown card');
+  if (!player.hand.contains(action.cardId)) {
+    throw IllegalActionException('card not in hand');
+  }
+  if (player.cardPlayedThisTurn) {
+    throw IllegalActionException('only one card per turn');
+  }
+  final expectedPhase =
+      spec.timing == CardTiming.diceChoice ? Phase.awaitingChoice : Phase.main;
+  if (state.phase != expectedPhase) {
+    throw IllegalActionException(
+        '${spec.name} cannot be played during ${state.phase.name}');
+  }
+
+  // Consume the card first; effects below build on `next`.
+  var next = state.withPlayer(player.id, (p) {
+    final hand = [...p.hand]..remove(action.cardId);
+    return p.copyWith(hand: hand, cardPlayedThisTurn: true);
+  });
+  final events = <GameEvent>[CardPlayed(action.cardId, player.id)];
+
+  switch (action.cardId) {
+    case 'second_chance':
+      final d1 = next.rng.rollDie();
+      final d2 = next.rng.rollDie();
+      next = next.copyWith(
+        lastDice: () => (d1, d2),
+        diceHistory: [...next.diceHistory, (d1, d2)],
+      );
+      events.add(DiceRolled(d1, d2));
+
+    case 'omen':
+      final index = action.dieIndex;
+      final delta = action.delta;
+      if (index == null || delta == null || delta.abs() != 1) {
+        throw IllegalActionException('omen needs a die and a direction');
+      }
+      final (d1, d2) = next.lastDice!;
+      final values = [d1, d2];
+      final shifted = values[index] + delta;
+      if (shifted < 1 || shifted > 6) {
+        throw IllegalActionException('die cannot leave 1..6');
+      }
+      values[index] = shifted;
+      next = next.copyWith(lastDice: () => (values[0], values[1]));
+
+    case 'drought':
+      final tile = _cardTile(next, action, needNumber: true);
+      if (tile.ownerId != null) {
+        _requireCardTargetable(next, player.id, tile.ownerId!);
+      }
+      next = next.copyWith(tiles: {
+        ...next.tiles,
+        tile.coord:
+            tile.copyWith(blockedUntilRound: () => next.round + 2),
+      });
+
+    case 'charter':
+      final tile = _cardTile(next, action);
+      if (tile.ownerId != null) {
+        throw IllegalActionException('tile already claimed');
+      }
+      final buyer = next.currentPlayer;
+      final claimCost = Rules.effectiveClaimCost(buyer);
+      if (!buyer.canAfford(claimCost)) {
+        throw IllegalActionException('cannot afford claim');
+      }
+      next = next.withPlayer(
+        buyer.id,
+        (p) => p.copyWith(
+            resources: p
+                .resourcesApplying(claimCost.map((k, v) => MapEntry(k, -v)))),
+      );
+      next = next.copyWith(tiles: {
+        ...next.tiles,
+        tile.coord: tile.copyWith(ownerId: buyer.id, level: 1),
+      });
+      events.add(HexClaimed(tile.coord, buyer.id));
+      return _checkInstantWin(next, events);
+
+    case 'cutpurse':
+      final targetId = action.targetPlayer;
+      if (targetId == null || targetId == player.id) {
+        throw IllegalActionException('cutpurse needs a rival target');
+      }
+      _requireCardTargetable(next, player.id, targetId);
+      final stolen = _stealRandom(next, from: targetId, to: player.id);
+      if (stolen == null) {
+        throw IllegalActionException('target has nothing to steal');
+      }
+      next = stolen.$1;
+      events.add(ResourceStolen(targetId, player.id, stolen.$2));
+
+    case 'bounty':
+      final resource = action.resource;
+      if (resource == null) {
+        throw IllegalActionException('bounty needs a resource');
+      }
+      next = next.withPlayer(player.id,
+          (p) => p.copyWith(resources: p.resourcesApplying({resource: 2})));
+
+    case 'banish':
+      final tile = _cardTile(next, action);
+      if (tile.ownerId != player.id || !tile.hasBandit) {
+        throw IllegalActionException('banish targets your bandit tile');
+      }
+      next = next.copyWith(tiles: {
+        ...next.tiles,
+        tile.coord: tile.copyWith(hasBandit: false),
+      });
+      events.add(BanditRemoved(tile.coord));
+
+    case 'brigand':
+      final tile = _cardTile(next, action);
+      if (tile.ownerId == null) {
+        throw IllegalActionException('bandit must target a claimed tile');
+      }
+      _requireBanditAllowed(next, tile);
+      next = next.copyWith(tiles: {
+        for (final t in next.tiles.values)
+          t.coord: t.coord == tile.coord
+              ? t.copyWith(hasBandit: true)
+              : (t.hasBandit ? t.copyWith(hasBandit: false) : t),
+      });
+      events.add(BanditPlaced(tile.coord));
+
+    case 'harvest':
+      final grants = <ProductionGrant>[];
+      for (final tile in next.tiles.values) {
+        if (tile.ownerId != player.id) continue;
+        if (!harvestNumbers.contains(tile.number)) continue;
+        if (tile.hasBandit) continue;
+        if (tile.blockedUntilRound != null &&
+            next.round < tile.blockedUntilRound!) {
+          continue;
+        }
+        final resource = tile.terrain.resource!;
+        final count = _productionCount(next, tile, 1);
+        grants.add((
+          hex: tile.coord,
+          playerId: player.id,
+          resource: resource,
+          count: count,
+        ));
+        next = next.withPlayer(
+          player.id,
+          (p) =>
+              p.copyWith(resources: p.resourcesApplying({resource: count})),
+        );
+      }
+      events.add(grants.isEmpty
+          ? const NothingProduced()
+          : ResourcesProduced(grants));
+
+    case 'tithe':
+      for (final opponent in state.players) {
+        if (opponent.id == player.id) continue;
+        if (opponent.hasLandmark('watchtower')) continue;
+        final stolen = _stealRandom(next, from: opponent.id, to: player.id);
+        if (stolen != null) {
+          next = stolen.$1;
+          events.add(ResourceStolen(opponent.id, player.id, stolen.$2));
+        }
+      }
+  }
+
+  return ApplyResult(next, events);
+}
+
+Tile _cardTile(GameState state, PlayCard action, {bool needNumber = false}) {
+  final hex = action.targetHex;
+  final tile = hex == null ? null : state.tiles[hex];
+  if (tile == null) throw IllegalActionException('card needs a target tile');
+  if (needNumber && tile.number == null) {
+    throw IllegalActionException('target must be a numbered tile');
+  }
+  return tile;
+}
+
+/// Moves one random resource between players; null if [from] is broke.
+(GameState, Resource)? _stealRandom(GameState state,
+    {required int from, required int to}) {
+  final victim = state.players[from];
+  final total = victim.totalResources;
+  if (total == 0) return null;
+  var pick = state.rng.nextInt(total);
+  late Resource chosen;
+  for (final entry in victim.resources.entries) {
+    if (pick < entry.value) {
+      chosen = entry.key;
+      break;
+    }
+    pick -= entry.value;
+  }
+  var next = state.withPlayer(
+      from, (p) => p.copyWith(resources: p.resourcesApplying({chosen: -1})));
+  next = next.withPlayer(
+      to, (p) => p.copyWith(resources: p.resourcesApplying({chosen: 1})));
+  return (next, chosen);
 }
 
 ApplyResult _endTurn(GameState state) {

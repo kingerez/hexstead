@@ -15,3 +15,5 @@ export 'src/reducer.dart';
 export 'src/scoring.dart';
 export 'src/serialization.dart';
 export 'src/bot/bot.dart';
+export 'src/model/cards.dart';
+export 'src/model/landmarks.dart';

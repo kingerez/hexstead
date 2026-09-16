@@ -1,5 +1,9 @@
 import 'actions.dart';
+import 'model/cards.dart';
 import 'model/game_state.dart';
+import 'model/player.dart';
+import 'model/tile.dart';
+import 'model/landmarks.dart';
 import 'model/terrain.dart';
 
 /// Every action the current player may legally take. Shared by UI button
@@ -9,14 +13,17 @@ List<GameAction> legalActions(GameState state) {
     case Phase.awaitingRoll:
       return const [RollDice()];
     case Phase.awaitingChoice:
-      return const [
-        ChooseActivation(ActivationMode.sum),
-        ChooseActivation(ActivationMode.split),
+      return [
+        const ChooseActivation(ActivationMode.sum),
+        const ChooseActivation(ActivationMode.split),
+        ..._cardActions(state, CardTiming.diceChoice),
       ];
     case Phase.awaitingBandit:
       return [
         for (final tile in state.tiles.values)
-          if (tile.ownerId != null) PlaceBandit(tile.coord),
+          if (tile.ownerId != null &&
+              !state.players[tile.ownerId!].hasLandmark('bandit_ward'))
+            PlaceBandit(tile.coord),
       ];
     case Phase.main:
       return _mainActions(state);
@@ -29,7 +36,7 @@ List<GameAction> _mainActions(GameState state) {
   final player = state.currentPlayer;
   final actions = <GameAction>[const EndTurn()];
 
-  if (player.canAfford(Rules.claimCost)) {
+  if (player.canAfford(Rules.effectiveClaimCost(player))) {
     final frontier = <GameAction>{};
     for (final tile in state.tiles.values) {
       if (tile.ownerId != player.id) continue;
@@ -51,8 +58,14 @@ List<GameAction> _mainActions(GameState state) {
     }
   }
 
+  for (final id in state.landmarkOffer) {
+    if (player.canAfford(landmarkCatalog[id]!.cost)) {
+      actions.add(BuyLandmark(id));
+    }
+  }
+
   for (final give in Resource.values) {
-    if (player.countOf(give) >= Rules.bankTradeRate) {
+    if (player.countOf(give) >= Rules.effectiveTradeRate(player)) {
       for (final get in Resource.values) {
         if (get != give) actions.add(BankTrade(give: give, get: get));
       }
@@ -76,5 +89,85 @@ List<GameAction> _mainActions(GameState state) {
     }
   }
 
+  actions.addAll(_cardActions(state, CardTiming.main));
+
   return actions;
 }
+
+List<GameAction> _cardActions(GameState state, CardTiming timing) {
+  final player = state.currentPlayer;
+  if (player.cardPlayedThisTurn) return const [];
+  final actions = <GameAction>[];
+  for (final cardId in player.hand.toSet()) {
+    final spec = cardCatalog[cardId];
+    if (spec == null || spec.timing != timing) continue;
+    switch (cardId) {
+      case 'second_chance':
+        actions.add(const PlayCard('second_chance'));
+      case 'omen':
+        final (d1, d2) = state.lastDice!;
+        for (final (index, value) in [d1, d2].indexed) {
+          for (final delta in const [-1, 1]) {
+            final shifted = value + delta;
+            if (shifted >= 1 && shifted <= 6) {
+              actions.add(PlayCard('omen', dieIndex: index, delta: delta));
+            }
+          }
+        }
+      case 'drought':
+        for (final tile in state.tiles.values) {
+          if (tile.number != null && !_watchtowerProtects(state, player, tile)) {
+            actions.add(PlayCard('drought', targetHex: tile.coord));
+          }
+        }
+      case 'charter':
+        if (player.canAfford(Rules.effectiveClaimCost(player))) {
+          for (final tile in state.tiles.values) {
+            if (tile.ownerId == null) {
+              actions.add(PlayCard('charter', targetHex: tile.coord));
+            }
+          }
+        }
+      case 'cutpurse':
+        for (final rival in state.players) {
+          if (rival.id != player.id &&
+              rival.totalResources > 0 &&
+              !rival.hasLandmark('watchtower')) {
+            actions.add(PlayCard('cutpurse', targetPlayer: rival.id));
+          }
+        }
+      case 'bounty':
+        for (final resource in Resource.values) {
+          actions.add(PlayCard('bounty', resource: resource));
+        }
+      case 'banish':
+        for (final tile in state.tiles.values) {
+          if (tile.ownerId == player.id && tile.hasBandit) {
+            actions.add(PlayCard('banish', targetHex: tile.coord));
+          }
+        }
+      case 'brigand':
+        for (final tile in state.tiles.values) {
+          if (tile.ownerId != null &&
+              !state.players[tile.ownerId!].hasLandmark('bandit_ward')) {
+            actions.add(PlayCard('brigand', targetHex: tile.coord));
+          }
+        }
+      case 'harvest':
+        actions.add(const PlayCard('harvest'));
+      case 'tithe':
+        if (state.players.any((p) =>
+            p.id != player.id &&
+            p.totalResources > 0 &&
+            !p.hasLandmark('watchtower'))) {
+          actions.add(const PlayCard('tithe'));
+        }
+    }
+  }
+  return actions;
+}
+
+bool _watchtowerProtects(GameState state, PlayerState actor, Tile tile) =>
+    tile.ownerId != null &&
+    tile.ownerId != actor.id &&
+    state.players[tile.ownerId!].hasLandmark('watchtower');

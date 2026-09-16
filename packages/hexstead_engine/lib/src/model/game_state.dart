@@ -3,6 +3,8 @@ import 'package:meta/meta.dart';
 import '../hex/hex.dart';
 import '../map_generator.dart';
 import '../rng.dart';
+import 'cards.dart';
+import 'landmarks.dart';
 import 'player.dart';
 import 'terrain.dart';
 import 'tile.dart';
@@ -18,6 +20,12 @@ abstract final class Rules {
   static const startingResources = {Resource.wood: 1, Resource.brick: 1};
   static const defaultTargetVp = 25;
   static const defaultRoundCap = 15;
+
+  static Map<Resource, int> effectiveClaimCost(PlayerState player) =>
+      player.hasLandmark('cheap_claims') ? {Resource.wood: 1} : claimCost;
+
+  static int effectiveTradeRate(PlayerState player) =>
+      player.hasLandmark('trade_post') ? 2 : bankTradeRate;
 }
 
 @immutable
@@ -75,6 +83,18 @@ class GameState {
         coord: tiles[coord]!.copyWith(ownerId: playerId, level: 1),
       };
     }
+    final deck = [
+      for (final id in cardCatalog.keys)
+        for (var copy = 0; copy < cardCopies; copy++) id,
+    ];
+    rng.shuffle(deck);
+    final hands = [
+      for (var i = 0; i < players.length; i++)
+        deck.sublist(i * startingHandSize, (i + 1) * startingHandSize),
+    ];
+    final landmarkPool = landmarkCatalog.keys.toList();
+    rng.shuffle(landmarkPool);
+    final offer = landmarkPool.take(landmarkOfferSize).toList();
     return GameState(
       seed: seed,
       rng: rng,
@@ -92,9 +112,10 @@ class GameState {
             isBot: setup.isBot,
             difficulty: setup.difficulty,
             resources: Rules.startingResources,
+            hand: hands[id],
           ),
       ],
-      landmarkOffer: const [],
+      landmarkOffer: offer,
     );
   }
 
