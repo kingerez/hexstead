@@ -237,11 +237,11 @@ class _GameScreenState extends State<GameScreen> {
     if (_rollingDice != null || _banditFlyTarget != null) return null;
     if (_pendingCardId != null) return null;
     if (!controller.isHumanTurn) {
-      return 'Rival rolls pay you too — your hexes always earn.';
+      return 'Rival rolls pay you too - your hexes always earn.';
     }
     switch (state.phase) {
       case Phase.awaitingRoll:
-        return 'Roll — every hex matching the dice pays its owner.';
+        return 'Roll - every hex matching the dice pays its owner.';
       case Phase.awaitingChoice:
         final (d1, d2) = state.lastDice!;
         return d1 + d2 == 7
@@ -250,7 +250,7 @@ class _GameScreenState extends State<GameScreen> {
       case Phase.awaitingBandit:
         return 'Drop the bandit on a rival hex to block it.';
       case Phase.main:
-        return 'Grow one connected region — big regions score big.';
+        return 'Grow one connected region - big regions score big.';
       case Phase.gameOver:
         return null;
     }
@@ -694,7 +694,7 @@ class _Hud extends StatelessWidget {
             Text(
               canBuild
                   ? 'Tap a glowing tile to claim or upgrade it'
-                  : 'Nothing affordable — end your turn',
+                  : 'Nothing affordable - end your turn',
               style: const TextStyle(color: Colors.white54, fontSize: 12),
               overflow: TextOverflow.ellipsis,
             ),

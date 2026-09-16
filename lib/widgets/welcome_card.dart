@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
 
-/// Game-start overlay: dims the fresh board and briefs the player — the win
-/// conditions and their secret goal — then hands off via [onStart].
+/// Game-start overlay: dims the fresh board and briefs the player - the win
+/// conditions and their secret goal - then hands off via [onStart].
 class WelcomeOverlay extends StatelessWidget {
   final GameState state;
   final VoidCallback onStart;
@@ -40,7 +40,7 @@ class WelcomeOverlay extends StatelessWidget {
                 ),
                 const SizedBox(height: 18),
                 Text(
-                  'First to ${state.targetVp} points wins — or the richest '
+                  'First to ${state.targetVp} points wins - or the richest '
                   'realm when round ${state.roundCap} ends.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
@@ -82,7 +82,7 @@ class WelcomeOverlay extends StatelessWidget {
               right: -30,
               top: -34,
               child: Opacity(
-                opacity: 0.25,
+                opacity: 0.15,
                 child: Text('🎯', style: TextStyle(fontSize: 130)),
               ),
             ),
@@ -90,7 +90,7 @@ class WelcomeOverlay extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'YOUR SECRET GOAL — ${objective.name.toUpperCase()}',
+                  'YOUR SECRET GOAL - ${objective.name.toUpperCase()}',
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,

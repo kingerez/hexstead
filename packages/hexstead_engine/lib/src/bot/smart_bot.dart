@@ -7,7 +7,7 @@ import '../rng.dart';
 import 'evaluator.dart';
 
 /// Greedy 1-ply bot: simulate each legal action, score the result, take the
-/// best. Difficulty tiers differ only in noise and attention — the dice are
+/// best. Difficulty tiers differ only in noise and attention - the dice are
 /// never touched.
 abstract final class SmartBot {
   static GameAction chooseAction(GameState state) {
@@ -63,7 +63,7 @@ abstract final class SmartBot {
         BotDifficulty.hard => 0.5,
       };
 
-  /// Deterministic pseudo-noise in [-1, 1] from the state identity — never
+  /// Deterministic pseudo-noise in [-1, 1] from the state identity - never
   /// the game RNG, so bot deliberation stays replay-safe.
   static double _noise(GameState state, int actionIndex) {
     final h = _hash(

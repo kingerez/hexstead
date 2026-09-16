@@ -18,7 +18,7 @@ class GameController extends ChangeNotifier {
   bool _drivingBots = false;
 
   /// Optional presentation hook, awaited after every applied action so the
-  /// UI can play animations (dice roll) before the game continues — this is
+  /// UI can play animations (dice roll) before the game continues - this is
   /// what makes bot turns wait for the on-screen dice to settle.
   Future<void> Function(List<GameEvent> events)? eventDelegate;
 

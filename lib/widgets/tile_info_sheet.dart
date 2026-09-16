@@ -97,7 +97,7 @@ class TileInfoSheet extends StatelessWidget {
                   ],
                   const SizedBox(height: 8),
                   if (owner == null)
-                    const Text('Unclaimed — claim it from an adjacent tile '
+                    const Text('Unclaimed - claim it from an adjacent tile '
                         'for 🪵1 🧱1')
                   else
                     Row(
@@ -108,8 +108,8 @@ class TileInfoSheet extends StatelessWidget {
                         const SizedBox(width: 6),
                         Flexible(
                           child: Text(
-                            '${owner.isBot ? owner.name : 'Yours'} — '
-                            '${tile.level == 1 ? 'camp (upgrade to village: 🌾2 🪨1)' : 'village — ×2 production (double ring)'}',
+                            '${owner.isBot ? owner.name : 'Yours'} - '
+                            '${tile.level == 1 ? 'camp (upgrade to village: 🌾2 🪨1)' : 'village - ×2 production (double ring)'}',
                           ),
                         ),
                       ],
@@ -117,13 +117,13 @@ class TileInfoSheet extends StatelessWidget {
                   if (tile.hasBandit)
                     const Padding(
                       padding: EdgeInsets.only(top: 6),
-                      child: Text('🦹 Bandit here — no production until '
+                      child: Text('🦹 Bandit here - no production until '
                           'the owner pays 2 resources'),
                     ),
                   if (blocked)
                     Padding(
                       padding: const EdgeInsets.only(top: 6),
-                      child: Text('🌵 Drought — no production until round '
+                      child: Text('🌵 Drought - no production until round '
                           '${tile.blockedUntilRound}'),
                     ),
                 ],

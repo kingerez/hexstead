@@ -3,9 +3,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 /// The bandit's entrance, in three beats:
-///  1. blackout — a grungy dark layer drops over the board and the bandit
+///  1. blackout - a grungy dark layer drops over the board and the bandit
 ///     looms huge at center screen for 500ms
-///  2. fly — the bandit shrinks and glides onto its hex while the grunge
+///  2. fly - the bandit shrinks and glides onto its hex while the grunge
 ///     layer fades away
 ///  3. a beat of rest, then [onDone] hands back to the painted board.
 class BanditFlyOverlay extends StatefulWidget {

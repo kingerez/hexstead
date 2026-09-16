@@ -93,7 +93,7 @@ class BoardPainter extends CustomPainter {
       );
     }
 
-    // Resource icon fills the hex — the tile IS its resource.
+    // Resource icon fills the hex - the tile IS its resource.
     _text(canvas, terrainEmoji[tile.terrain]!,
         center - Offset(0, hexSize * 0.14), hexSize * 0.95);
 

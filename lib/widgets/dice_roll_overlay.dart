@@ -3,9 +3,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 /// Center-screen 2D dice roll in three phases:
-///  1. tumble — faces cycle rapidly and decelerate onto the real values
-///  2. hold — the settled result stays put so it can be read
-///  3. fly — the panel shrinks and glides down toward the HUD, then [onDone]
+///  1. tumble - faces cycle rapidly and decelerate onto the real values
+///  2. hold - the settled result stays put so it can be read
+///  3. fly - the panel shrinks and glides down toward the HUD, then [onDone]
 class DiceRollOverlay extends StatefulWidget {
   final int d1;
   final int d2;

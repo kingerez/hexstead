@@ -49,7 +49,7 @@ abstract final class StubBot {
     return best ?? actions.first;
   }
 
-  /// Ways to roll [number] with 2d6 — a cheap tile-quality proxy.
+  /// Ways to roll [number] with 2d6 - a cheap tile-quality proxy.
   static int _pips(int? number) =>
       number == null ? 0 : 6 - (number - 7).abs();
 }
