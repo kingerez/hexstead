@@ -256,37 +256,46 @@ class _Hud extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              for (final r in Resource.values)
-                Padding(
-                  padding: const EdgeInsets.only(right: 14),
-                  child: Text(
-                    '${resourceEmoji[r]} ${human.countOf(r)}',
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
-                  ),
-                ),
-              const Spacer(),
-              if (controller.isHumanTurn)
-                TextButton(
-                  onPressed: onOpenCards,
-                  child: Text('🎴 ${human.hand.length}'),
-                ),
-              if (controller.isHumanTurn && state.phase == Phase.main)
-                TextButton(
-                  onPressed: onOpenLandmarks,
-                  child: Text('🏛 ${state.landmarkOffer.length}'),
-                ),
-              if (controller.isHumanTurn &&
-                  state.phase == Phase.main &&
-                  Resource.values.any((r) =>
-                      human.countOf(r) >= Rules.effectiveTradeRate(human)))
-                TextButton(
-                  onPressed: () => _showTradeSheet(context, human),
-                  child: Text(
-                      'Trade ${Rules.effectiveTradeRate(human)}:1'),
-                ),
-            ],
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final r in Resource.values)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 14),
+                      child: Text(
+                        '${resourceEmoji[r]} ${human.countOf(r)}',
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 16),
+                      ),
+                    ),
+                  const SizedBox(width: 8),
+                  if (controller.isHumanTurn)
+                    TextButton(
+                      onPressed: onOpenCards,
+                      child: Text('🎴 ${human.hand.length}'),
+                    ),
+                  if (controller.isHumanTurn && state.phase == Phase.main)
+                    TextButton(
+                      onPressed: onOpenLandmarks,
+                      child: Text('🏛 ${state.landmarkOffer.length}'),
+                    ),
+                  if (controller.isHumanTurn &&
+                      state.phase == Phase.main &&
+                      Resource.values.any((r) =>
+                          human.countOf(r) >=
+                          Rules.effectiveTradeRate(human)))
+                    TextButton(
+                      onPressed: () => _showTradeSheet(context, human),
+                      child:
+                          Text('Trade ${Rules.effectiveTradeRate(human)}:1'),
+                    ),
+                ],
+              ),
+            ),
           ),
           if (human.objectiveId != null)
             Align(
@@ -328,7 +337,9 @@ class _Hud extends StatelessWidget {
       case Phase.awaitingChoice:
         final (d1, d2) = state.lastDice!;
         final sum = d1 + d2;
-        return Row(
+        return FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text('🎲 $d1 + $d2  ',
@@ -345,6 +356,7 @@ class _Hud extends StatelessWidget {
               child: Text('Split $d1 & $d2'),
             ),
           ],
+          ),
         );
       case Phase.awaitingBandit:
         return const Text(
@@ -354,26 +366,24 @@ class _Hud extends StatelessWidget {
       case Phase.main:
         final canRemoveBandit =
             legalActions(state).whereType<RemoveBandit>().isNotEmpty;
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Tap a glowing tile to claim/upgrade',
-              style: TextStyle(color: Colors.white38, fontSize: 12),
-            ),
-            const SizedBox(width: 10),
-            if (canRemoveBandit)
-              FilledButton.tonal(
-                onPressed: () => onAction(
-                    legalActions(state).whereType<RemoveBandit>().first),
-                child: const Text('Pay off bandit'),
+        return FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (canRemoveBandit)
+                FilledButton.tonal(
+                  onPressed: () => onAction(
+                      legalActions(state).whereType<RemoveBandit>().first),
+                  child: const Text('Pay off bandit'),
+                ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: () => onAction(const EndTurn()),
+                child: const Text('End Turn'),
               ),
-            const SizedBox(width: 8),
-            FilledButton(
-              onPressed: () => onAction(const EndTurn()),
-              child: const Text('End Turn'),
-            ),
-          ],
+            ],
+          ),
         );
       case Phase.gameOver:
         return const SizedBox.shrink();
