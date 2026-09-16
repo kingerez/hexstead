@@ -130,5 +130,13 @@ void main() {
       // live score is 4 (region), objective would add 4 more, target is 99
       expect(scoreFor(s, 0), 4);
     });
+
+    test('finalScoreFor = live score + objective bonus', () {
+      final s = board([
+        for (var q = 0; q < 4; q++) (Hex(q, 0), TerrainType.forest, 5, 0, 1),
+      ]);
+      expect(finalScoreFor(s, 0), 8);
+      expect(finalScoreFor(s, 1), 0);
+    });
   });
 }

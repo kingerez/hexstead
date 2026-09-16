@@ -1,16 +1,13 @@
 import 'hex/hex.dart';
 import 'model/game_state.dart';
 import 'model/landmarks.dart';
+import 'model/objectives.dart';
 import 'model/tile.dart';
 
 /// A player's live score: region-multiplier territory score plus landmark
 /// points. Secret objectives are added separately at game end.
 int scoreFor(GameState state, int playerId) {
-  var score = territoryScore(state, playerId);
-  // Landmark VP is added once the landmark catalog lands (kept separate so
-  // territory tests stay exact).
-  score += landmarkScore(state, playerId);
-  return score;
+  return territoryScore(state, playerId) + landmarkScore(state, playerId);
 }
 
 /// Kingdomino-style: each connected same-terrain region scores
@@ -44,6 +41,16 @@ int territoryScore(GameState state, int playerId) {
     total += size * (1 + villages);
   }
   return total;
+}
+
+/// Final total shown at game end: live score plus any completed secret
+/// objective's bonus.
+int finalScoreFor(GameState state, int playerId) {
+  final player = state.players[playerId];
+  final spec = objectiveCatalog[player.objectiveId];
+  final bonus =
+      spec != null && spec.isComplete(state, playerId) ? spec.bonusVp : 0;
+  return scoreFor(state, playerId) + bonus;
 }
 
 int landmarkScore(GameState state, int playerId) {

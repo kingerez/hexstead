@@ -10,13 +10,60 @@ class GameOverScreen extends StatelessWidget {
 
   const GameOverScreen({super.key, required this.controller});
 
+  /// One scoreboard row: final total plus the revealed secret objective.
+  Widget _playerRow(GameState state, PlayerState p) {
+    final objective = objectiveCatalog[p.objectiveId];
+    final complete = objective?.isComplete(state, p.id) ?? false;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Column(
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.circle,
+                  size: 12, color: BoardPainter.playerColors[p.id]),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 130,
+                child: Text(
+                  p.name,
+                  style: const TextStyle(color: Colors.white, fontSize: 18),
+                ),
+              ),
+              Text(
+                '${finalScoreFor(state, p.id)} pts',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          if (objective != null)
+            Text(
+              complete
+                  ? '🎯 ${objective.name} fulfilled (+${objective.bonusVp})'
+                  : '✗ ${objective.name} unfulfilled',
+              style: TextStyle(
+                color: complete ? Colors.amber : Colors.white38,
+                fontSize: 12,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = controller.state!;
     final winner = state.players[state.winnerId!];
     final humanWon = !winner.isBot;
     final ranked = [...state.players]
-      ..sort((a, b) => scoreFor(state, b.id).compareTo(scoreFor(state, a.id)));
+      ..sort((a, b) =>
+          finalScoreFor(state, b.id).compareTo(finalScoreFor(state, a.id)));
 
     return Scaffold(
       backgroundColor: const Color(0xFF2E4034),
@@ -34,34 +81,7 @@ class GameOverScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 24),
-              for (final p in ranked)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.circle,
-                          size: 12, color: BoardPainter.playerColors[p.id]),
-                      const SizedBox(width: 8),
-                      SizedBox(
-                        width: 120,
-                        child: Text(
-                          p.name,
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 18),
-                        ),
-                      ),
-                      Text(
-                        '${scoreFor(state, p.id)} pts',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              for (final p in ranked) _playerRow(state, p),
               const SizedBox(height: 32),
               FilledButton(
                 onPressed: () => Navigator.of(context).pushReplacement(

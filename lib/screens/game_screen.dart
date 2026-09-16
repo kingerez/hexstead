@@ -3,6 +3,7 @@ import 'package:hexstead_engine/hexstead_engine.dart';
 
 import '../board/board_painter.dart';
 import '../board/board_widget.dart';
+import '../widgets/hand_sheet.dart';
 import '../state/game_controller.dart';
 import 'game_over_screen.dart';
 
@@ -18,6 +19,9 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> {
   Hex? _selected;
   bool _navigatedToGameOver = false;
+
+  /// A card awaiting a tile tap (drought/charter/banish/brigand).
+  String? _pendingCardId;
 
   GameController get controller => widget.controller;
   GameState get state => controller.state!;
@@ -62,6 +66,13 @@ class _GameScreenState extends State<GameScreen> {
   Set<Hex> get _highlighted {
     if (!controller.isHumanTurn) return const {};
     final actions = legalActions(state);
+    if (_pendingCardId != null) {
+      return actions
+          .whereType<PlayCard>()
+          .where((a) => a.cardId == _pendingCardId && a.targetHex != null)
+          .map((a) => a.targetHex!)
+          .toSet();
+    }
     return {
       if (state.phase == Phase.awaitingBandit)
         ...actions.whereType<PlaceBandit>().map((a) => a.target)
@@ -75,6 +86,13 @@ class _GameScreenState extends State<GameScreen> {
   void _onTapHex(Hex hex) {
     if (!controller.isHumanTurn) return;
     final actions = legalActions(state);
+    if (_pendingCardId != null) {
+      final action = actions.whereType<PlayCard>().where(
+          (a) => a.cardId == _pendingCardId && a.targetHex == hex);
+      setState(() => _pendingCardId = null);
+      if (action.isNotEmpty) _tryDispatch(action.first);
+      return;
+    }
     if (state.phase == Phase.awaitingBandit) {
       if (actions.contains(PlaceBandit(hex))) {
         _tryDispatch(PlaceBandit(hex));
@@ -88,6 +106,23 @@ class _GameScreenState extends State<GameScreen> {
     } else {
       setState(() => _selected = _selected == hex ? null : hex);
     }
+  }
+
+  Future<void> _openSheet(Widget sheet) async {
+    final action = await showModalBottomSheet<GameAction>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => sheet,
+    );
+    if (action == null) return;
+    if (action is PlayCard &&
+        action.targetHex == null &&
+        const {'drought', 'charter', 'banish', 'brigand'}
+            .contains(action.cardId)) {
+      setState(() => _pendingCardId = action.cardId);
+      return;
+    }
+    await _tryDispatch(action);
   }
 
   @override
@@ -106,9 +141,32 @@ class _GameScreenState extends State<GameScreen> {
                 onTapHex: _onTapHex,
               ),
             ),
+            if (_pendingCardId != null)
+              Container(
+                width: double.infinity,
+                color: Colors.amber.shade800,
+                padding: const EdgeInsets.all(8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${cardCatalog[_pendingCardId]!.name}: tap a glowing tile',
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => setState(() => _pendingCardId = null),
+                      child: const Text('Cancel',
+                          style: TextStyle(color: Colors.white)),
+                    ),
+                  ],
+                ),
+              ),
             _Hud(
               controller: controller,
               onAction: _tryDispatch,
+              onOpenCards: () => _openSheet(HandSheet(state: state)),
+              onOpenLandmarks: () => _openSheet(LandmarkSheet(state: state)),
             ),
           ],
         ),
@@ -168,8 +226,15 @@ class _TopBar extends StatelessWidget {
 class _Hud extends StatelessWidget {
   final GameController controller;
   final Future<void> Function(GameAction) onAction;
+  final VoidCallback onOpenCards;
+  final VoidCallback onOpenLandmarks;
 
-  const _Hud({required this.controller, required this.onAction});
+  const _Hud({
+    required this.controller,
+    required this.onAction,
+    required this.onOpenCards,
+    required this.onOpenLandmarks,
+  });
 
   static const resourceEmoji = {
     Resource.wood: '🪵',
@@ -202,16 +267,40 @@ class _Hud extends StatelessWidget {
                   ),
                 ),
               const Spacer(),
+              if (controller.isHumanTurn)
+                TextButton(
+                  onPressed: onOpenCards,
+                  child: Text('🎴 ${human.hand.length}'),
+                ),
+              if (controller.isHumanTurn && state.phase == Phase.main)
+                TextButton(
+                  onPressed: onOpenLandmarks,
+                  child: Text('🏛 ${state.landmarkOffer.length}'),
+                ),
               if (controller.isHumanTurn &&
                   state.phase == Phase.main &&
-                  Resource.values
-                      .any((r) => human.countOf(r) >= Rules.bankTradeRate))
+                  Resource.values.any((r) =>
+                      human.countOf(r) >= Rules.effectiveTradeRate(human)))
                 TextButton(
                   onPressed: () => _showTradeSheet(context, human),
-                  child: const Text('Trade 3:1'),
+                  child: Text(
+                      'Trade ${Rules.effectiveTradeRate(human)}:1'),
                 ),
             ],
           ),
+          if (human.objectiveId != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  '🎯 ${objectiveCatalog[human.objectiveId]!.name}: '
+                  '${objectiveCatalog[human.objectiveId]!.description}'
+                  ' (+${objectiveCatalog[human.objectiveId]!.bonusVp}, secret)',
+                  style: const TextStyle(color: Colors.white38, fontSize: 11),
+                ),
+              ),
+            ),
           const SizedBox(height: 6),
           SizedBox(
             height: 48,
@@ -292,6 +381,7 @@ class _Hud extends StatelessWidget {
   }
 
   void _showTradeSheet(BuildContext context, PlayerState human) {
+    final rate = Rules.effectiveTradeRate(human);
     showModalBottomSheet<void>(
       context: context,
       builder: (sheetContext) => SafeArea(
@@ -301,14 +391,14 @@ class _Hud extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Bank trade: give 3, take 1',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
+              Text('Bank trade: give $rate, take 1',
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
               for (final give in Resource.values)
-                if (human.countOf(give) >= Rules.bankTradeRate)
+                if (human.countOf(give) >= rate)
                   Row(
                     children: [
-                      Text('3 ${resourceEmoji[give]} →'),
+                      Text('$rate ${resourceEmoji[give]} →'),
                       for (final get in Resource.values)
                         if (get != give)
                           TextButton(
