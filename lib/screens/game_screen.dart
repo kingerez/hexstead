@@ -73,7 +73,7 @@ class _GameScreenState extends State<GameScreen> {
       setState(() {
         _rollingDice = (roll.d1, roll.d2);
         _rollDuration = Duration(milliseconds: isBot ? 800 : 1200);
-        _holdDuration = Duration(milliseconds: isBot ? 800 : 1500);
+        _holdDuration = Duration(milliseconds: isBot ? 500 : 1000);
         _rollCompleter = completer;
       });
       await completer.future;
@@ -247,32 +247,43 @@ class _GameScreenState extends State<GameScreen> {
                           endSize: geometry.hexSize * 0.80,
                           onDone: _onBanditLanded,
                         ),
+                      // Card-targeting banner floats over the board so the
+                      // layout (and the hex grid) never shifts.
+                      if (_pendingCardId != null)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: Container(
+                            color: Colors.amber.shade800,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 4),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    '${cardCatalog[_pendingCardId]!.name}: '
+                                    'tap a glowing tile',
+                                    style:
+                                        const TextStyle(color: Colors.white),
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: () =>
+                                      setState(() => _pendingCardId = null),
+                                  child: const Text('Cancel',
+                                      style:
+                                          TextStyle(color: Colors.white)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                     ],
                   );
                 },
               ),
             ),
-            if (_pendingCardId != null)
-              Container(
-                width: double.infinity,
-                color: Colors.amber.shade800,
-                padding: const EdgeInsets.all(8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '${cardCatalog[_pendingCardId]!.name}: tap a glowing tile',
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () => setState(() => _pendingCardId = null),
-                      child: const Text('Cancel',
-                          style: TextStyle(color: Colors.white)),
-                    ),
-                  ],
-                ),
-              ),
             _Hud(
               controller: controller,
               rolling: _rollingDice != null,
@@ -409,7 +420,11 @@ class _Hud extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Align(
+          // Every row has a FIXED height so the HUD (and the board above it)
+          // never shifts as buttons come and go.
+          SizedBox(
+            height: 40,
+            child: Align(
             alignment: Alignment.centerLeft,
             child: FittedBox(
               fit: BoxFit.scaleDown,
@@ -449,20 +464,24 @@ class _Hud extends StatelessWidget {
                 ],
               ),
             ),
+            ),
           ),
-          if (human.objectiveId != null)
-            Align(
+          SizedBox(
+            height: 18,
+            child: Align(
               alignment: Alignment.centerLeft,
-              child: Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(
-                  '🎯 ${objectiveCatalog[human.objectiveId]!.name}: '
-                  '${objectiveCatalog[human.objectiveId]!.description}'
-                  ' (+${objectiveCatalog[human.objectiveId]!.bonusVp}, secret)',
-                  style: const TextStyle(color: Colors.white38, fontSize: 11),
-                ),
+              child: Text(
+                human.objectiveId == null
+                    ? ''
+                    : '🎯 ${objectiveCatalog[human.objectiveId]!.name}: '
+                        '${objectiveCatalog[human.objectiveId]!.description}'
+                        ' (+${objectiveCatalog[human.objectiveId]!.bonusVp}, secret)',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white38, fontSize: 11),
               ),
             ),
+          ),
           const SizedBox(height: 6),
           SizedBox(
             height: 72,
