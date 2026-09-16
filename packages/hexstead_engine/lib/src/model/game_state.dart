@@ -5,6 +5,7 @@ import '../map_generator.dart';
 import '../rng.dart';
 import 'cards.dart';
 import 'landmarks.dart';
+import 'objectives.dart';
 import 'player.dart';
 import 'terrain.dart';
 import 'tile.dart';
@@ -95,6 +96,8 @@ class GameState {
     final landmarkPool = landmarkCatalog.keys.toList();
     rng.shuffle(landmarkPool);
     final offer = landmarkPool.take(landmarkOfferSize).toList();
+    final objectivePool = objectiveCatalog.keys.toList();
+    rng.shuffle(objectivePool);
     return GameState(
       seed: seed,
       rng: rng,
@@ -113,6 +116,7 @@ class GameState {
             difficulty: setup.difficulty,
             resources: Rules.startingResources,
             hand: hands[id],
+            objectiveId: objectivePool[id],
           ),
       ],
       landmarkOffer: offer,

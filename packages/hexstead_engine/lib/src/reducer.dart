@@ -4,6 +4,8 @@ import 'hex/hex.dart';
 import 'model/game_state.dart';
 import 'model/cards.dart';
 import 'model/landmarks.dart';
+import 'model/objectives.dart';
+import 'model/player.dart';
 import 'model/terrain.dart';
 import 'model/tile.dart';
 import 'scoring.dart';
@@ -522,8 +524,10 @@ ApplyResult _checkInstantWin(GameState state, List<GameEvent> events) {
 
 ApplyResult _finishGame(GameState state, List<GameEvent> events,
     {int? instantWinner}) {
+  // Final totals reveal secret objectives; live scores never include them.
   final scores = {
-    for (final p in state.players) p.id: scoreFor(state, p.id),
+    for (final p in state.players)
+      p.id: scoreFor(state, p.id) + _objectiveBonus(state, p),
   };
   final winner = instantWinner ??
       (state.players.map((p) => p.id).toList()
@@ -534,6 +538,12 @@ ApplyResult _finishGame(GameState state, List<GameEvent> events,
           .first;
   final next = state.copyWith(phase: Phase.gameOver, winnerId: () => winner);
   return ApplyResult(next, [...events, GameEnded(winner, scores)]);
+}
+
+int _objectiveBonus(GameState state, PlayerState player) {
+  final spec = objectiveCatalog[player.objectiveId];
+  if (spec == null) return 0;
+  return spec.isComplete(state, player.id) ? spec.bonusVp : 0;
 }
 
 void _requirePhase(GameState state, Phase phase, String what) {

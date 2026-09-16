@@ -17,3 +17,4 @@ export 'src/serialization.dart';
 export 'src/bot/bot.dart';
 export 'src/model/cards.dart';
 export 'src/model/landmarks.dart';
+export 'src/model/objectives.dart';
