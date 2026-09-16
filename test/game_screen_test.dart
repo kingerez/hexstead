@@ -50,8 +50,8 @@ void main() {
     expect(find.text('Welcome to Hexstead'), findsNothing);
     await tester.pump(const Duration(milliseconds: 600));
     expect(find.text('Welcome to Hexstead'), findsOneWidget);
-    expect(find.textContaining('Your secret goal'), findsOneWidget);
-    expect(find.textContaining('bonus points at game end'), findsOneWidget);
+    expect(find.textContaining('YOUR SECRET GOAL'), findsOneWidget);
+    expect(find.textContaining('Bonus:'), findsOneWidget);
 
     await tester.tap(find.text('Start'));
     await tester.pumpAndSettle();
