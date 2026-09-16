@@ -10,6 +10,7 @@ import '../board/board_widget.dart';
 import '../widgets/bandit_fly_overlay.dart';
 import '../widgets/dice_roll_overlay.dart';
 import '../widgets/hand_sheet.dart';
+import '../widgets/production_overlay.dart';
 import '../widgets/tile_info_sheet.dart';
 import '../widgets/welcome_card.dart';
 import '../state/game_controller.dart';
@@ -40,6 +41,10 @@ class _GameScreenState extends State<GameScreen> {
   /// Bandit fly-in target; the game waits until it lands.
   Hex? _banditFlyTarget;
   Completer<void>? _banditCompleter;
+
+  /// Production payout being floated over the board right now.
+  (List<ProductionGrant>, List<int>)? _production;
+  Completer<void>? _productionCompleter;
 
   /// Board canvas size from the last layout, for overlay positioning.
   Size _boardSize = Size.zero;
@@ -114,6 +119,20 @@ class _GameScreenState extends State<GameScreen> {
       await completer.future;
     }
     if (!mounted) return;
+    // Payout moment: float the gains (or the whiff) after an activation.
+    final chosen = events.whereType<ActivationChosen>();
+    if (chosen.isNotEmpty) {
+      final grants = [
+        for (final e in events.whereType<ResourcesProduced>()) ...e.grants,
+      ];
+      final completer = Completer<void>();
+      setState(() {
+        _production = (grants, chosen.first.activatedNumbers);
+        _productionCompleter = completer;
+      });
+      await completer.future;
+    }
+    if (!mounted) return;
     final banditPlacements = events.whereType<BanditPlaced>();
     if (banditPlacements.isNotEmpty && _boardSize != Size.zero) {
       final completer = Completer<void>();
@@ -131,6 +150,16 @@ class _GameScreenState extends State<GameScreen> {
       setState(() {
         _rollingDice = null;
         _rollCompleter = null;
+      });
+    }
+  }
+
+  void _onProductionShown() {
+    _productionCompleter?.complete();
+    if (mounted) {
+      setState(() {
+        _production = null;
+        _productionCompleter = null;
       });
     }
   }
@@ -303,6 +332,15 @@ class _GameScreenState extends State<GameScreen> {
                                 Offset(0, constraints.maxHeight / 2 + 30),
                             onDone: _onDiceSettled,
                           ),
+                        ),
+                      if (_production != null)
+                        ProductionOverlay(
+                          key: ValueKey(state.diceHistory.length * 100 +
+                              _production!.$1.length),
+                          geometry: geometry,
+                          grants: _production!.$1,
+                          activatedNumbers: _production!.$2,
+                          onDone: _onProductionShown,
                         ),
                       if (_banditFlyTarget != null)
                         BanditFlyOverlay(

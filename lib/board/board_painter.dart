@@ -69,7 +69,7 @@ class BoardPainter extends CustomPainter {
       canvas.drawPath(
         path,
         Paint()
-          ..color = Colors.white.withValues(alpha: 0.35)
+          ..color = Colors.white.withValues(alpha: 0.30)
           ..style = PaintingStyle.fill,
       );
     }
@@ -158,6 +158,25 @@ class BoardPainter extends CustomPainter {
     }
     if (tile.hasBandit && tile.coord != hideBanditAt) {
       _text(canvas, '🦹', center - Offset(0, hexSize * 0.02), hexSize * 0.80);
+    }
+
+    // Actionable tiles get an unmissable amber glow on top of everything.
+    if (highlighted.contains(tile.coord)) {
+      canvas.drawPath(
+        path,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = hexSize * 0.16
+          ..color = const Color(0xFFFFD54F)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+      );
+      canvas.drawPath(
+        path,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = hexSize * 0.06
+          ..color = const Color(0xFFFFF3D6),
+      );
     }
   }
 
