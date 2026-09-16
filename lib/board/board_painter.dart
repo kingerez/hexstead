@@ -31,12 +31,14 @@ class BoardPainter extends CustomPainter {
     Color(0xFF3DB39E), // teal
   ];
 
+  /// Tiles show the resource they yield, matching the HUD icons, so "what
+  /// does this hex give me" needs no legend. Desert shows scenery.
   static const terrainEmoji = {
-    TerrainType.forest: '🌲',
+    TerrainType.forest: '🪵',
     TerrainType.field: '🌾',
     TerrainType.hill: '🧱',
-    TerrainType.mountain: '⛰️',
-    TerrainType.desert: '🏜️',
+    TerrainType.mountain: '🪨',
+    TerrainType.desert: '🌵',
   };
 
   @override
@@ -86,50 +88,41 @@ class BoardPainter extends CustomPainter {
       );
     }
 
-    // Terrain emoji, small, upper part.
-    _text(canvas, terrainEmoji[tile.terrain]!, center - Offset(0, hexSize * 0.42),
-        hexSize * 0.34);
+    // Resource icon: big and unobstructed in the upper half.
+    _text(canvas, terrainEmoji[tile.terrain]!,
+        center - Offset(0, hexSize * 0.36), hexSize * 0.48);
 
-    // Building.
-    if (tile.level == 1) {
-      _text(canvas, '⛺', center + Offset(0, hexSize * 0.30), hexSize * 0.40);
-    } else if (tile.level == 2) {
-      _text(canvas, '🏘️', center + Offset(0, hexSize * 0.30), hexSize * 0.44);
-    }
-
-    // Number token with probability pips.
+    // Number token in the lower half; 6/8 are the frequent rolls, in red.
     final number = tile.number;
     if (number != null) {
-      final tokenCenter = center + Offset(0, hexSize * -0.02);
+      final tokenCenter = center + Offset(0, hexSize * 0.32);
       final hot = number == 6 || number == 8;
       canvas.drawCircle(
         tokenCenter,
-        hexSize * 0.26,
+        hexSize * 0.24,
         Paint()..color = const Color(0xFFF4EAD4),
       );
       _text(
         canvas,
         '$number',
-        tokenCenter - Offset(0, hexSize * 0.02),
+        tokenCenter,
         hexSize * 0.30,
         color: hot ? const Color(0xFFB33D3D) : const Color(0xFF4A3B28),
         bold: hot,
       );
-      final pips = 6 - (number - 7).abs();
-      final pipPaint = Paint()..color = const Color(0xFF4A3B28);
-      const gap = 3.2;
-      for (var i = 0; i < pips; i++) {
-        canvas.drawCircle(
-          tokenCenter +
-              Offset((i - (pips - 1) / 2) * gap, hexSize * 0.17),
-          1.1,
-          pipPaint,
-        );
-      }
+    }
+
+    // Building badge beside the number token.
+    if (tile.level == 1) {
+      _text(canvas, '⛺', center + Offset(-hexSize * 0.42, hexSize * 0.32),
+          hexSize * 0.36);
+    } else if (tile.level == 2) {
+      _text(canvas, '🏘️', center + Offset(-hexSize * 0.42, hexSize * 0.32),
+          hexSize * 0.40);
     }
 
     if (tile.hasBandit) {
-      _text(canvas, '🦹', center - Offset(0, hexSize * 0.05), hexSize * 0.62);
+      _text(canvas, '🦹', center - Offset(0, hexSize * 0.02), hexSize * 0.62);
     }
   }
 
