@@ -283,15 +283,15 @@ class _GameScreenState extends State<GameScreen> {
         final canClaim = actions.any((a) => a is ClaimHex);
         final canUpgrade = actions.any((a) => a is UpgradeHex);
         if (canClaim && canUpgrade) {
-          return 'You can afford to build - tap a glowing hex.';
+          return 'You can build - tap a glowing hex.';
         }
         if (canClaim) {
-          return 'You can afford a claim (1 wood + 1 brick) - tap a glowing hex.';
+          return 'Claim a glowing hex for 1 wood + 1 brick.';
         }
         if (canUpgrade) {
-          return 'You can upgrade a camp to a village - tap the glowing hex.';
+          return 'Tap the glowing camp to make it a village.';
         }
-        return 'Nothing affordable - grow one connected region when you can.';
+        return 'Save up - big connected regions score big.';
       case Phase.gameOver:
         return null;
     }
@@ -477,7 +477,7 @@ class _TipBar extends StatelessWidget {
                   ),
                   child: Text(
                     tip!,
-                    maxLines: 2,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: Colors.white70, fontSize: 12),
