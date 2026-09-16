@@ -33,7 +33,7 @@ class _ProductionOverlayState extends State<ProductionOverlay>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: Duration(milliseconds: widget.grants.isEmpty ? 900 : 1200),
+    duration: Duration(milliseconds: widget.grants.isEmpty ? 1800 : 1200),
   );
 
   static const _resourceEmoji = {

@@ -80,16 +80,69 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
-  /// Card fan shown right after the welcome briefing.
-  bool _showCardFan = false;
+  /// Card fan state: intro reveal after the briefing, or opened from the
+  /// HUD fan icon.
+  CardFanMode? _cardFanMode;
 
   void _dismissWelcome() {
     setState(() {
       _showWelcome = false;
       _hudVisible = true;
       final hand = state.players.firstWhere((p) => !p.isBot).hand;
-      _showCardFan = hand.isNotEmpty;
+      _cardFanMode = hand.isNotEmpty ? CardFanMode.intro : null;
     });
+  }
+
+  /// Executes a card chosen from the fan, mirroring the old sheet logic:
+  /// direct plays dispatch, target cards enter tap-a-tile mode, and
+  /// multi-option cards ask via a small dialog.
+  Future<void> _handleCardPlay(String cardId) async {
+    final options = legalActions(state)
+        .whereType<PlayCard>()
+        .where((a) => a.cardId == cardId)
+        .toList();
+    if (options.isEmpty) return;
+    if (const {'drought', 'charter', 'banish', 'brigand'}.contains(cardId)) {
+      setState(() => _pendingCardId = cardId);
+      return;
+    }
+    if (cardId == 'cutpurse' && options.length > 1) {
+      await _pickOption('Steal from…',
+          [for (final o in options) (state.players[o.targetPlayer!].name, o)]);
+      return;
+    }
+    if (cardId == 'bounty') {
+      await _pickOption(
+          'Take 2 of…', [for (final o in options) (o.resource!.name, o)]);
+      return;
+    }
+    if (cardId == 'omen' && options.length > 1) {
+      final (d1, d2) = state.lastDice!;
+      await _pickOption('Shift a die', [
+        for (final o in options)
+          ('die ${o.dieIndex == 0 ? d1 : d2} ${o.delta! > 0 ? '+1' : '-1'}', o),
+      ]);
+      return;
+    }
+    await _tryDispatch(options.first);
+  }
+
+  Future<void> _pickOption(
+      String title, List<(String, PlayCard)> options) async {
+    final action = await showDialog<PlayCard>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: Text(title),
+        children: [
+          for (final (label, a) in options)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(dialogContext, a),
+              child: Text(label),
+            ),
+        ],
+      ),
+    );
+    if (action != null) await _tryDispatch(action);
   }
 
   void _toggleTips() {
@@ -422,7 +475,8 @@ class _GameScreenState extends State<GameScreen> {
                 controller: controller,
                 rolling: _rollingDice != null,
                 onAction: _tryDispatch,
-                onOpenCards: () => _openSheet(HandSheet(state: state)),
+                onOpenCards: () =>
+                    setState(() => _cardFanMode = CardFanMode.hand),
                 onOpenLandmarks: () =>
                     _openSheet(LandmarkSheet(state: state)),
               ),
@@ -432,10 +486,18 @@ class _GameScreenState extends State<GameScreen> {
           ),
           if (_showWelcome)
             WelcomeOverlay(state: state, onStart: _dismissWelcome),
-          if (_showCardFan)
+          if (_cardFanMode != null)
             CardFanOverlay(
+              mode: _cardFanMode!,
               cardIds: state.players.firstWhere((p) => !p.isBot).hand,
-              onDone: () => setState(() => _showCardFan = false),
+              playableCardIds: controller.isHumanTurn
+                  ? legalActions(state)
+                      .whereType<PlayCard>()
+                      .map((a) => a.cardId)
+                      .toSet()
+                  : const {},
+              onPlay: _handleCardPlay,
+              onDone: () => setState(() => _cardFanMode = null),
             ),
         ],
       ),
@@ -655,9 +717,14 @@ class _Hud extends StatelessWidget {
                     ),
                   const SizedBox(width: 8),
                   if (controller.isHumanTurn)
-                    TextButton(
-                      onPressed: onOpenCards,
-                      child: Text('🎴 Cards (${human.hand.length})'),
+                    InkWell(
+                      onTap: onOpenCards,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        child: CardFanIcon(count: human.hand.length),
+                      ),
                     ),
                   if (controller.isHumanTurn && state.phase == Phase.main)
                     TextButton(

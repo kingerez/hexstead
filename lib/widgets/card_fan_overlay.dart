@@ -1,14 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
 
-/// Right after the welcome briefing: presents the player's starting hand
-/// as a fan at center screen for 2 seconds, then sweeps the cards down
-/// toward the Cards button and hands off via [onDone].
+enum CardFanMode {
+  /// Game-start reveal: display only, dismissed by the "Got it" button.
+  intro,
+
+  /// Opened from the HUD fan icon: cards can be played, closed by tapping
+  /// outside.
+  hand,
+}
+
+/// The hand as a centered fan of cards. Enters by scaling up from the HUD
+/// icon's corner, leaves by shrinking back down to it.
 class CardFanOverlay extends StatefulWidget {
   final List<String> cardIds;
+  final CardFanMode mode;
+
+  /// Card ids with at least one legal play right now (hand mode).
+  final Set<String> playableCardIds;
+  final void Function(String cardId)? onPlay;
   final VoidCallback onDone;
 
-  const CardFanOverlay({super.key, required this.cardIds, required this.onDone});
+  const CardFanOverlay({
+    super.key,
+    required this.cardIds,
+    required this.mode,
+    required this.onDone,
+    this.playableCardIds = const {},
+    this.onPlay,
+  });
 
   @override
   State<CardFanOverlay> createState() => _CardFanOverlayState();
@@ -16,55 +36,59 @@ class CardFanOverlay extends StatefulWidget {
 
 class _CardFanOverlayState extends State<CardFanOverlay>
     with SingleTickerProviderStateMixin {
-  static const _holdMs = 2000;
-  static const _flyMs = 550;
-  static const _totalMs = _holdMs + _flyMs;
-
-  late final AnimationController _controller = AnimationController(
+  // flyT: 0 = fan open at center, 1 = shrunk down at the HUD icon.
+  late final AnimationController _fly = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: _totalMs),
+    duration: const Duration(milliseconds: 380),
+    value: 1.0,
   );
+
+  String? _playedCardId;
 
   @override
   void initState() {
     super.initState();
-    _controller.forward().whenComplete(() {
-      if (mounted) widget.onDone();
-    });
+    _fly.reverse(); // enter: icon -> center
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _fly.dispose();
     super.dispose();
+  }
+
+  Future<void> _close({String? play}) async {
+    if (_fly.status == AnimationStatus.forward) return;
+    _playedCardId = play;
+    await _fly.forward();
+    if (!mounted) return;
+    widget.onDone();
+    if (play != null) widget.onPlay?.call(play);
   }
 
   @override
   Widget build(BuildContext context) {
     final screen = MediaQuery.sizeOf(context);
     return AnimatedBuilder(
-      animation: _controller,
+      animation: _fly,
       builder: (context, _) {
-        final ms = _controller.value * _totalMs;
-        final inT = Curves.easeOutBack
-            .transform((ms / 350).clamp(0.0, 1.0));
-        final flyT = ms <= _holdMs
-            ? 0.0
-            : Curves.easeInCubic
-                .transform(((ms - _holdMs) / _flyMs).clamp(0.0, 1.0));
-
-        // Sweep down-left toward the Cards button in the HUD.
-        final flyOffset =
-            Offset(-screen.width * 0.05, screen.height * 0.38) * flyT;
-        final scale = (0.6 + 0.4 * inT) * (1.0 - 0.72 * flyT);
+        final flyT = Curves.easeInOutCubic.transform(_fly.value);
+        final settled = _fly.value == 0;
+        final offset =
+            Offset(-screen.width * 0.30, screen.height * 0.38) * flyT;
+        final scale = 1.0 - 0.75 * flyT;
 
         return Positioned.fill(
-          child: IgnorePointer(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: widget.mode == CardFanMode.hand && _playedCardId == null
+                ? () => _close()
+                : null,
             child: Container(
               color: Colors.black.withValues(alpha: 0.5 * (1 - flyT)),
               alignment: Alignment.center,
               child: Transform.translate(
-                offset: flyOffset,
+                offset: offset,
                 child: Transform.scale(
                   scale: scale,
                   child: Column(
@@ -82,22 +106,43 @@ class _CardFanOverlayState extends State<CardFanOverlay>
                         ),
                       ),
                       const SizedBox(height: 18),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          for (final (i, id) in widget.cardIds.indexed)
-                            Transform.translate(
-                              offset: Offset(
-                                  0, i == widget.cardIds.length ~/ 2 ? -8 : 4),
-                              child: Transform.rotate(
-                                angle: (i - (widget.cardIds.length - 1) / 2) *
-                                    0.14,
-                                child: _card(id),
+                      if (widget.cardIds.isEmpty)
+                        const Text(
+                          'No cards left.',
+                          style: TextStyle(color: Colors.white70),
+                        )
+                      else
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            for (final (i, id) in widget.cardIds.indexed)
+                              Transform.translate(
+                                offset: Offset(0,
+                                    i == widget.cardIds.length ~/ 2 ? -8 : 4),
+                                child: Transform.rotate(
+                                  angle:
+                                      (i - (widget.cardIds.length - 1) / 2) *
+                                          0.14,
+                                  child: _card(id, settled),
+                                ),
                               ),
+                          ],
+                        ),
+                      const SizedBox(height: 22),
+                      if (widget.mode == CardFanMode.intro)
+                        Opacity(
+                          opacity: (1 - flyT).clamp(0.0, 1.0),
+                          child: FilledButton(
+                            onPressed: settled ? () => _close() : null,
+                            style: FilledButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 42, vertical: 13),
                             ),
-                        ],
-                      ),
+                            child: const Text('Got it',
+                                style: TextStyle(fontSize: 16)),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -109,11 +154,13 @@ class _CardFanOverlayState extends State<CardFanOverlay>
     );
   }
 
-  Widget _card(String id) {
+  Widget _card(String id, bool settled) {
     final spec = cardCatalog[id]!;
+    final playable = widget.mode == CardFanMode.hand &&
+        widget.playableCardIds.contains(id);
     return Container(
       width: 108,
-      height: 156,
+      height: 176,
       margin: const EdgeInsets.symmetric(horizontal: 3),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -121,7 +168,8 @@ class _CardFanOverlayState extends State<CardFanOverlay>
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFF8A6F4D), width: 2),
         boxShadow: const [
-          BoxShadow(color: Colors.black45, blurRadius: 10, offset: Offset(0, 4)),
+          BoxShadow(
+              color: Colors.black45, blurRadius: 10, offset: Offset(0, 4)),
         ],
       ),
       child: Column(
@@ -142,12 +190,97 @@ class _CardFanOverlayState extends State<CardFanOverlay>
             child: Text(
               spec.description,
               overflow: TextOverflow.fade,
-              style:
-                  const TextStyle(fontSize: 11, color: Color(0xFF5A4A34)),
+              style: const TextStyle(fontSize: 11, color: Color(0xFF5A4A34)),
             ),
           ),
+          if (widget.mode == CardFanMode.hand)
+            SizedBox(
+              width: double.infinity,
+              height: 30,
+              child: playable
+                  ? FilledButton(
+                      onPressed:
+                          settled ? () => _close(play: id) : null,
+                      style: FilledButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        textStyle: const TextStyle(fontSize: 12),
+                      ),
+                      child: const Text('Play'),
+                    )
+                  : const Center(
+                      child: Text(
+                        'not now',
+                        style: TextStyle(
+                            fontSize: 10, color: Color(0xFF9A8A6A)),
+                      ),
+                    ),
+            ),
         ],
       ),
     );
   }
+}
+
+/// HUD button: a little fan of card backs; the number of cards drawn IS the
+/// number of cards in hand.
+class CardFanIcon extends StatelessWidget {
+  final int count;
+
+  const CardFanIcon({super.key, required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: const Size(44, 32),
+      painter: _CardFanIconPainter(count),
+    );
+  }
+}
+
+class _CardFanIconPainter extends CustomPainter {
+  final int count;
+
+  const _CardFanIconPainter(this.count);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final n = count.clamp(0, 5);
+    final center = Offset(size.width / 2, size.height * 0.95);
+    if (n == 0) {
+      _paintCard(canvas, center, 0, const Color(0x33FFFFFF), outline: true);
+      return;
+    }
+    for (var i = 0; i < n; i++) {
+      final angle = (i - (n - 1) / 2) * 0.30;
+      _paintCard(canvas, center, angle, const Color(0xFFF4EAD4));
+    }
+  }
+
+  void _paintCard(Canvas canvas, Offset pivot, double angle, Color color,
+      {bool outline = false}) {
+    canvas.save();
+    canvas.translate(pivot.dx, pivot.dy);
+    canvas.rotate(angle);
+    final rect = RRect.fromRectAndRadius(
+      const Rect.fromLTWH(-7, -26, 14, 24),
+      const Radius.circular(3),
+    );
+    final paint = Paint()
+      ..color = color
+      ..style = outline ? PaintingStyle.stroke : PaintingStyle.fill
+      ..strokeWidth = 1.4;
+    if (!outline) {
+      canvas.drawRRect(
+          rect,
+          Paint()
+            ..color = const Color(0xFF8A6F4D)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.6);
+    }
+    canvas.drawRRect(rect, paint);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_CardFanIconPainter old) => old.count != count;
 }

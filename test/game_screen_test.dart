@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hexstead/board/board_widget.dart';
 import 'package:hexstead/screens/game_screen.dart';
+import 'package:hexstead/widgets/card_fan_overlay.dart';
 import 'package:hexstead/widgets/dice_roll_overlay.dart';
 import 'package:hexstead/widgets/tile_info_sheet.dart';
 import 'package:hexstead/state/game_controller.dart';
@@ -22,11 +23,13 @@ class InMemorySaveStore implements SaveStore {
   Future<void> clear() async => saved = null;
 }
 
-/// Fresh games show the welcome briefing after 500ms; dismiss it so the
-/// HUD slides in and play can start.
+/// Fresh games show the welcome briefing after 500ms, then the card fan;
+/// dismiss both so play can start.
 Future<void> dismissWelcome(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 600));
   await tester.tap(find.text('Start'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Got it'));
   await tester.pumpAndSettle();
 }
 
@@ -56,7 +59,43 @@ void main() {
     await tester.tap(find.text('Start'));
     await tester.pumpAndSettle();
     expect(find.text('Welcome to Hexstead'), findsNothing);
+
+    // The starting hand is revealed and waits for explicit dismissal.
+    expect(find.text('Your cards'), findsOneWidget);
+    expect(find.text('Got it'), findsOneWidget);
+    await tester.tap(find.text('Got it'));
+    await tester.pumpAndSettle();
+    expect(find.text('Your cards'), findsNothing);
     expect(find.text('Roll the dice'), findsOneWidget);
+  });
+
+  testWidgets('tapping the fan icon reopens the hand as a card fan',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final controller = GameController(
+      saveStore: InMemorySaveStore(),
+      botStepDelay: Duration.zero,
+    );
+    await controller.startNewGame(seed: 13, players: const [
+      PlayerSetup(name: 'You', isBot: false),
+      PlayerSetup(name: 'Bot', isBot: true),
+    ]);
+    await tester.pumpWidget(
+      MaterialApp(home: GameScreen(controller: controller)),
+    );
+    await dismissWelcome(tester);
+
+    await tester.tap(find.byType(CardFanIcon));
+    await tester.pumpAndSettle();
+    expect(find.text('Your cards'), findsOneWidget);
+    // Cards show their names in the fan.
+    final hand = controller.state!.players.first.hand;
+    expect(find.text(cardCatalog[hand.first]!.name), findsOneWidget);
+
+    // Tap outside to close.
+    await tester.tapAt(const Offset(10, 200));
+    await tester.pumpAndSettle();
+    expect(find.text('Your cards'), findsNothing);
   });
 
   testWidgets('roll button rolls, choice buttons appear, sum resolves',
