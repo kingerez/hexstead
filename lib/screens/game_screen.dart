@@ -279,7 +279,19 @@ class _GameScreenState extends State<GameScreen> {
       case Phase.awaitingBandit:
         return 'Drop the bandit on a rival hex to block it.';
       case Phase.main:
-        return 'Grow one connected region - big regions score big.';
+        final actions = legalActions(state);
+        final canClaim = actions.any((a) => a is ClaimHex);
+        final canUpgrade = actions.any((a) => a is UpgradeHex);
+        if (canClaim && canUpgrade) {
+          return 'You can afford to build - tap a glowing hex.';
+        }
+        if (canClaim) {
+          return 'You can afford a claim (1 wood + 1 brick) - tap a glowing hex.';
+        }
+        if (canUpgrade) {
+          return 'You can upgrade a camp to a village - tap the glowing hex.';
+        }
+        return 'Nothing affordable - grow one connected region when you can.';
       case Phase.gameOver:
         return null;
     }
