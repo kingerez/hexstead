@@ -27,6 +27,17 @@ class HexsteadApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
+      // Phone-shaped frame: on wide screens (desktop web) the game stays a
+      // centered portrait column instead of stretching across the monitor.
+      builder: (context, child) => ColoredBox(
+        color: const Color(0xFF1B231D),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: child!,
+          ),
+        ),
+      ),
       home: MenuScreen(controller: controller),
     );
   }
