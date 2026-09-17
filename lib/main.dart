@@ -2,11 +2,14 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'art/art_store.dart';
 import 'screens/menu_screen.dart';
 import 'state/game_controller.dart';
 import 'state/persistence.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await ArtStore.instance.load();
   runApp(
     HexsteadApp(controller: GameController(saveStore: createSaveStore())),
   );

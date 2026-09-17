@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
 
+import '../art/art_store.dart';
+
 /// The landmark shop as a 2x2 spread of art cards. Tap outside to close;
 /// affordable landmarks carry a live Buy button.
 class ShopOverlay extends StatelessWidget {
@@ -122,8 +124,14 @@ class ShopOverlay extends StatelessWidget {
             bottom: -6,
             child: Opacity(
               opacity: 0.18,
-              child: Text(landmarkEmoji[id] ?? '🏛',
-                  style: const TextStyle(fontSize: 110)),
+              child: ArtStore.instance.image(
+                'assets/images/landmarks/lm_$id.png',
+                width: 130,
+                height: 130,
+                fit: BoxFit.contain,
+                placeholder: Text(landmarkEmoji[id] ?? '🏛',
+                    style: const TextStyle(fontSize: 110)),
+              ),
             ),
           ),
           Padding(

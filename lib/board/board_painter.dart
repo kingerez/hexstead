@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
 
+import '../art/art_store.dart';
 import 'board_geometry.dart';
 
 /// Placeholder-art board: colored hex polygons, emoji buildings, number
@@ -69,10 +70,26 @@ class BoardPainter extends CustomPainter {
     final center = geometry.centerOf(tile.coord);
     final hexSize = geometry.hexSize;
 
-    canvas.drawPath(
-      path,
-      Paint()..color = terrainColors[tile.terrain]!,
-    );
+    final sprite = ArtStore.instance.tileImage(tile.terrain);
+    if (sprite != null) {
+      // Real art: fill the hex with the sprite, clipped to the hex shape.
+      canvas.save();
+      canvas.clipPath(path);
+      final bounds = path.getBounds();
+      canvas.drawImageRect(
+        sprite,
+        Rect.fromLTWH(
+            0, 0, sprite.width.toDouble(), sprite.height.toDouble()),
+        bounds,
+        Paint()..filterQuality = FilterQuality.medium,
+      );
+      canvas.restore();
+    } else {
+      canvas.drawPath(
+        path,
+        Paint()..color = terrainColors[tile.terrain]!,
+      );
+    }
 
     if (highlighted.contains(tile.coord)) {
       canvas.drawPath(
@@ -102,9 +119,12 @@ class BoardPainter extends CustomPainter {
       );
     }
 
-    // Resource icon fills the hex - the tile IS its resource.
-    _text(canvas, terrainEmoji[tile.terrain]!,
-        center - Offset(0, hexSize * 0.14), hexSize * 0.95);
+    // Resource icon fills the hex - the tile IS its resource. With real
+    // tile art the sprite already depicts the resource, so skip the emoji.
+    if (sprite == null) {
+      _text(canvas, terrainEmoji[tile.terrain]!,
+          center - Offset(0, hexSize * 0.14), hexSize * 0.95);
+    }
 
     // Number token at the bottom. Ownership lives in the token itself:
     // owner-colored disc with white text; unowned stays cream with the
@@ -166,7 +186,23 @@ class BoardPainter extends CustomPainter {
       );
     }
     if (tile.hasBandit && tile.coord != hideBanditAt) {
-      _text(canvas, '🦹', center - Offset(0, hexSize * 0.02), hexSize * 0.80);
+      final banditSprite = ArtStore.instance.banditImage;
+      if (banditSprite != null) {
+        final side = hexSize * 1.1;
+        canvas.drawImageRect(
+          banditSprite,
+          Rect.fromLTWH(0, 0, banditSprite.width.toDouble(),
+              banditSprite.height.toDouble()),
+          Rect.fromCenter(
+              center: center - Offset(0, hexSize * 0.02),
+              width: side,
+              height: side),
+          Paint()..filterQuality = FilterQuality.medium,
+        );
+      } else {
+        _text(canvas, '🦹', center - Offset(0, hexSize * 0.02),
+            hexSize * 0.80);
+      }
     }
 
     // Upgradable tiles glow in their OWNER's color.

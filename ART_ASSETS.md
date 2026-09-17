@@ -1,70 +1,70 @@
-# Hexstead — AI Art Generation Guide
+# Hexstead - AI Art Generation Guide (v2)
 
-The game is fully playable with placeholder art (colored hexes + emoji). Drop
-PNGs into `assets/images/` using the file names below and they will replace
-placeholders per-asset (partial art is fine — missing files fall back).
+The game is fully playable with placeholders. **Any PNG you drop into
+`assets/images/` at the paths below is picked up automatically on the next
+build; anything missing keeps its placeholder.** Generate in any order -
+partial art always works.
 
 ## Style prompt prefix (use verbatim on EVERY asset for consistency)
 
 > Cozy medieval storybook game asset, flat vector illustration style, soft
 > rounded shapes, warm autumn palette (moss green, wheat gold, terracotta,
 > slate blue, cream), gentle top-left lighting, subtle texture, no text,
-> no watermark, centered subject, transparent background.
+> no watermark, centered subject, transparent background, PNG.
 
-Tips: generate one asset you love first (e.g. the forest tile), then feed it
-back as a style reference image for every other batch. Generate at 2x the
-listed size and downscale.
+Tips: generate one asset you love first (the forest tile), then feed it back
+as a style reference for every other batch. Generate at the listed size or
+larger and downscale. Tiles are drawn clipped to a hexagon, so fill the
+whole square frame edge to edge (corners get cropped by the hex mask).
 
-## Assets
+## Priority 1 - the board (biggest visual win)
 
-| File | Size | Subject (append to style prefix) |
+| File | Size | Prompt subject |
 |---|---|---|
-| `tiles/tile_forest.png` (+`_2` variant) | 512×512 | pointy-top hexagon tile, dense pine and oak forest seen from above at a slight angle |
-| `tiles/tile_field.png` (+`_2`) | 512×512 | hexagon tile, golden wheat field with haystacks |
-| `tiles/tile_hill.png` (+`_2`) | 512×512 | hexagon tile, rolling clay hills with a small brick kiln |
-| `tiles/tile_mountain.png` (+`_2`) | 512×512 | hexagon tile, grey stone peaks with snow caps |
-| `tiles/tile_desert.png` | 512×512 | hexagon tile, sandy dunes, single cactus |
-| `buildings/camp.png` | 256×256 | small medieval tent camp with campfire |
-| `buildings/village.png` | 256×256 | cluster of three thatched-roof cottages, chimney smoke |
-| `bandit.png` | 256×256 | cheeky hooded bandit with a loot sack, mischievous not scary |
-| `resources/wood.png` | 128×128 | icon, small stack of cut logs |
-| `resources/grain.png` | 128×128 | icon, tied wheat sheaf |
-| `resources/brick.png` | 128×128 | icon, stack of clay bricks |
-| `resources/stone.png` | 128×128 | icon, pile of grey stone blocks |
-| `dice/die_1.png` … `die_6.png` | 192×192 | cream ivory die face with N terracotta pips, rounded corners |
-| `cards/card_frame.png` | 512×716 | ornate parchment playing-card frame, empty center panel and title banner |
-| `cards/card_back.png` | 512×716 | card back with heraldic hex-and-dice emblem |
-| `cards/art_second_chance.png` | 384×384 | two dice mid-tumble with motion swirls |
-| `cards/art_omen.png` | 384×384 | a hand nudging a die, tiny stars |
-| `cards/art_drought.png` | 384×384 | cracked dry field under a pale sun |
-| `cards/art_charter.png` | 384×384 | royal scroll with wax seal and ribbon |
-| `cards/art_cutpurse.png` | 384×384 | masked figure snatching a coin pouch |
-| `cards/art_bounty.png` | 384×384 | overflowing crate of mixed goods |
-| `cards/art_banish.png` | 384×384 | villager with a broom chasing a fleeing bandit |
-| `cards/art_brigand.png` | 384×384 | hooded bandit sneaking toward a village at dusk |
-| `cards/art_harvest.png` | 384×384 | festival table piled with produce, bunting |
-| `cards/art_tithe.png` | 384×384 | tax collector with ledger and small chest |
-| `landmarks/lm_high_roller.png` | 256×256 | small medieval gambling hall with dice sign |
-| `landmarks/lm_trade_post.png` | 256×256 | market stall with scales |
-| `landmarks/lm_cheap_claims.png` | 256×256 | surveyor's tripod and rolled maps |
-| `landmarks/lm_bandit_ward.png` | 256×256 | stone boundary marker with warding rune |
-| `landmarks/lm_granary.png` | 256×256 | round grain silo |
-| `landmarks/lm_lumber_mill.png` | 256×256 | water-wheel sawmill |
-| `landmarks/lm_deep_mine.png` | 256×256 | timber mine entrance with cart |
-| `landmarks/lm_kiln.png` | 256×256 | brick kiln with smoke |
-| `landmarks/lm_cathedral.png` | 256×256 | small stone cathedral with rose window |
-| `landmarks/lm_market_hall.png` | 256×256 | timber-framed market hall |
-| `landmarks/lm_watchtower.png` | 256×256 | stone watchtower with banner |
-| `landmarks/lm_keep.png` | 256×256 | squat castle keep |
-| `objectives/obj_scroll.png` | 256×256 | sealed quest scroll (one generic icon is enough for v1) |
-| `ui/panel_bg.png` | 256×256 | parchment panel with darkened wood border (9-slice) |
-| `ui/button_bg.png` | 256×96 | carved wooden button (9-slice) |
-| `ui/bg_menu.png` | 1536×2048 | distant cozy medieval valley with hex-patterned farmland at dawn (no transparency) |
-| `icon/app_icon.png` | 1024×1024 | single forest hex tile with an ivory die leaning against it (no transparency, fills canvas) |
+| `tiles/tile_forest.png` | 512x512 | dense pine and oak forest seen from above at a slight angle, scattered cut logs |
+| `tiles/tile_field.png` | 512x512 | golden wheat field with haystacks, top-down slight angle |
+| `tiles/tile_hill.png` | 512x512 | rolling clay hills with a small brick kiln and stacked bricks |
+| `tiles/tile_mountain.png` | 512x512 | grey stone peaks with snow caps and boulders |
+| `tiles/tile_desert.png` | 512x512 | sandy dunes, single cactus, bleached bones |
+| `bandit.png` | 256x256 | cheeky hooded bandit figure with a loot sack, mischievous not scary |
 
-~45 images. Priority order if generating incrementally:
-1. 5 terrain tiles + camp + village + bandit (the board)
-2. 4 resource icons + 6 die faces (the HUD)
-3. menu background + app icon
-4. card frame/back + card arts
-5. landmark icons, UI 9-slices
+Note: each tile must read as its resource at a glance (logs / wheat /
+bricks / stone) - the tile art replaces both the terrain color AND the
+resource icon.
+
+## Priority 2 - identity
+
+| File | Size | Prompt subject |
+|---|---|---|
+| `ui/bg_menu.png` | 1536x2048 | distant cozy medieval valley with hex-patterned farmland at dawn (no transparency) |
+| App icon (replaces `ios/Runner/Assets.xcassets/AppIcon.appiconset/`) | 1024x1024 | single forest hex tile with an ivory die leaning on it (no transparency, fills canvas) |
+
+## Priority 3 - the shop (art shows as card watermark, auto-wired)
+
+All 256x256, `landmarks/lm_<id>.png`:
+
+| File | Subject |
+|---|---|
+| `lm_high_roller.png` | medieval gambling hall with a dice sign |
+| `lm_trade_post.png` | market stall with brass scales |
+| `lm_cheap_claims.png` | surveyor's tripod and rolled maps |
+| `lm_bandit_ward.png` | stone boundary marker with a warding rune |
+| `lm_granary.png` | round grain silo |
+| `lm_lumber_mill.png` | water-wheel sawmill |
+| `lm_deep_mine.png` | timber mine entrance with an ore cart |
+| `lm_kiln.png` | brick kiln with smoke |
+| `lm_cathedral.png` | small stone cathedral with rose window |
+| `lm_market_hall.png` | timber-framed market hall |
+| `lm_watchtower.png` | stone watchtower with banner |
+| `lm_keep.png` | squat castle keep |
+
+## Priority 4 - polish (slots exist, wiring is trivial when files land)
+
+| File | Size | Subject |
+|---|---|---|
+| `resources/wood.png` `grain.png` `brick.png` `stone.png` | 128x128 | icons: stacked logs / wheat sheaf / clay bricks / stone blocks (for the HUD) |
+| `cards/art_<card_id>.png` x10 | 384x384 | one per card: second_chance (two dice mid-tumble), omen (hand nudging a die), drought (cracked dry field), charter (royal scroll with wax seal), cutpurse (masked figure snatching a pouch), bounty (overflowing crate of goods), banish (villager with broom chasing bandit), brigand (hooded figure sneaking at dusk), harvest (festival table piled with produce), tithe (tax collector with ledger) |
+| `ui/panel_bg.png` | 256x256 | parchment panel with darkened wood border (9-slice) |
+
+Already looking good and NOT needing art: dice (drawn), number tokens
+(drawn), card frames (drawn), player colors (drawn).
