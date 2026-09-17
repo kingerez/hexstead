@@ -98,6 +98,41 @@ void main() {
     expect(find.text('Your cards'), findsNothing);
   });
 
+  testWidgets('floating shop and trade buttons open their overlays',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final controller = GameController(
+      saveStore: InMemorySaveStore(),
+      botStepDelay: Duration.zero,
+    );
+    await controller.startNewGame(seed: 14, players: const [
+      PlayerSetup(name: 'You', isBot: false),
+      PlayerSetup(name: 'Bot', isBot: true),
+    ]);
+    await tester.pumpWidget(
+      MaterialApp(home: GameScreen(controller: controller)),
+    );
+    await dismissWelcome(tester);
+
+    // Shop: shows the landmark offer as cards.
+    await tester.tap(find.text('🏛'));
+    await tester.pumpAndSettle();
+    expect(find.text('Landmarks for sale'), findsOneWidget);
+    final offer = controller.state!.landmarkOffer;
+    expect(find.text(landmarkCatalog[offer.first]!.name), findsOneWidget);
+    await tester.tapAt(const Offset(10, 60));
+    await tester.pumpAndSettle();
+    expect(find.text('Landmarks for sale'), findsNothing);
+
+    // Trade: shows the bank trade card.
+    await tester.tap(find.byIcon(Icons.handshake));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Bank trade'), findsOneWidget);
+    await tester.tapAt(const Offset(10, 60));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Bank trade'), findsNothing);
+  });
+
   testWidgets('roll button rolls, choice buttons appear, sum resolves',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

@@ -11,7 +11,8 @@ import '../widgets/adjust_die_dialog.dart';
 import '../widgets/bandit_fly_overlay.dart';
 import '../widgets/card_fan_overlay.dart';
 import '../widgets/dice_roll_overlay.dart';
-import '../widgets/hand_sheet.dart';
+import '../widgets/shop_overlay.dart';
+import '../widgets/trade_overlay.dart';
 import '../widgets/production_overlay.dart';
 import '../widgets/tile_info_sheet.dart';
 import '../widgets/welcome_card.dart';
@@ -83,6 +84,10 @@ class _GameScreenState extends State<GameScreen> {
 
   /// Whether the card fan is on screen (game-start reveal or icon tap).
   bool _cardFanOpen = false;
+
+  /// Landmark shop and bank trade overlays.
+  bool _shopOpen = false;
+  bool _tradeOpen = false;
 
   /// Anchors for the fan's fly-to-icon animation.
   final GlobalKey _screenStackKey = GlobalKey();
@@ -333,23 +338,6 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
-  Future<void> _openSheet(Widget sheet) async {
-    final action = await showModalBottomSheet<GameAction>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => sheet,
-    );
-    if (action == null) return;
-    if (action is PlayCard &&
-        action.targetHex == null &&
-        const {'drought', 'charter', 'banish', 'brigand'}
-            .contains(action.cardId)) {
-      setState(() => _pendingCardId = action.cardId);
-      return;
-    }
-    await _tryDispatch(action);
-  }
-
   /// One short sentence about the current moment; null hides the balloon.
   String? _currentTip() {
     if (_rollingDice != null || _banditFlyTarget != null) return null;
@@ -485,6 +473,31 @@ class _GameScreenState extends State<GameScreen> {
                             ),
                           ),
                         ),
+                      // Always-visible shop and trade buttons, floating in
+                      // the board's corner so the layout never shifts.
+                      Positioned(
+                        right: 10,
+                        bottom: 10,
+                        child: Column(
+                          children: [
+                            _RoundActionButton(
+                              enabled: controller.isHumanTurn &&
+                                  _rollingDice == null,
+                              onTap: () => setState(() => _shopOpen = true),
+                              child: const Text('🏛',
+                                  style: TextStyle(fontSize: 24)),
+                            ),
+                            const SizedBox(height: 10),
+                            _RoundActionButton(
+                              enabled: controller.isHumanTurn &&
+                                  _rollingDice == null,
+                              onTap: () => setState(() => _tradeOpen = true),
+                              child: const Icon(Icons.handshake,
+                                  size: 24, color: Color(0xFF3A2E20)),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   );
                 },
@@ -500,8 +513,6 @@ class _GameScreenState extends State<GameScreen> {
                 onAction: _tryDispatch,
                 onOpenCards: () => setState(() => _cardFanOpen = true),
                 cardIconKey: _cardIconKey,
-                onOpenLandmarks: () =>
-                    _openSheet(LandmarkSheet(state: state)),
               ),
             ),
           ],
@@ -522,7 +533,64 @@ class _GameScreenState extends State<GameScreen> {
               onPlay: _handleCardPlay,
               onDone: () => setState(() => _cardFanOpen = false),
             ),
+          if (_shopOpen)
+            ShopOverlay(
+              state: state,
+              buyableIds: legalActions(state)
+                  .whereType<BuyLandmark>()
+                  .map((a) => a.landmarkId)
+                  .toSet(),
+              onBuy: (id) {
+                setState(() => _shopOpen = false);
+                _tryDispatch(BuyLandmark(id));
+              },
+              onClose: () => setState(() => _shopOpen = false),
+            ),
+          if (_tradeOpen)
+            TradeOverlay(
+              state: state,
+              legalTrades:
+                  legalActions(state).whereType<BankTrade>().toList(),
+              onTrade: _tryDispatch,
+              onClose: () => setState(() => _tradeOpen = false),
+            ),
         ],
+      ),
+    );
+  }
+}
+
+/// Circular parchment button for the floating board actions.
+class _RoundActionButton extends StatelessWidget {
+  final bool enabled;
+  final VoidCallback onTap;
+  final Widget child;
+
+  const _RoundActionButton({
+    required this.enabled,
+    required this.onTap,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: enabled ? 1.0 : 0.35,
+      child: Material(
+        color: const Color(0xFFF4EAD4),
+        shape: const CircleBorder(
+          side: BorderSide(color: Color(0xFF8A6F4D), width: 2),
+        ),
+        elevation: 4,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: enabled ? onTap : null,
+          child: SizedBox(
+            width: 50,
+            height: 50,
+            child: Center(child: child),
+          ),
+        ),
       ),
     );
   }
@@ -688,7 +756,6 @@ class _Hud extends StatelessWidget {
   final bool rolling;
   final Future<void> Function(GameAction) onAction;
   final VoidCallback onOpenCards;
-  final VoidCallback onOpenLandmarks;
   final GlobalKey? cardIconKey;
 
   const _Hud({
@@ -696,7 +763,6 @@ class _Hud extends StatelessWidget {
     required this.rolling,
     required this.onAction,
     required this.onOpenCards,
-    required this.onOpenLandmarks,
     this.cardIconKey,
   });
 
@@ -751,21 +817,6 @@ class _Hud extends StatelessWidget {
                             horizontal: 6, vertical: 2),
                         child: CardFanIcon(count: human.hand.length),
                       ),
-                    ),
-                  if (controller.isHumanTurn && state.phase == Phase.main)
-                    TextButton(
-                      onPressed: onOpenLandmarks,
-                      child: Text('🏛 Shop (${state.landmarkOffer.length})'),
-                    ),
-                  if (controller.isHumanTurn &&
-                      state.phase == Phase.main &&
-                      Resource.values.any((r) =>
-                          human.countOf(r) >=
-                          Rules.effectiveTradeRate(human)))
-                    TextButton(
-                      onPressed: () => _showTradeSheet(context, human),
-                      child:
-                          Text('Trade ${Rules.effectiveTradeRate(human)}:1'),
                     ),
                 ],
               ),
@@ -887,40 +938,4 @@ class _Hud extends StatelessWidget {
     }
   }
 
-  void _showTradeSheet(BuildContext context, PlayerState human) {
-    final rate = Rules.effectiveTradeRate(human);
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Bank trade: give $rate, take 1',
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 8),
-              for (final give in Resource.values)
-                if (human.countOf(give) >= rate)
-                  Row(
-                    children: [
-                      Text('$rate ${resourceEmoji[give]} →'),
-                      for (final get in Resource.values)
-                        if (get != give)
-                          TextButton(
-                            onPressed: () {
-                              Navigator.pop(sheetContext);
-                              onAction(BankTrade(give: give, get: get));
-                            },
-                            child: Text(resourceEmoji[get]!),
-                          ),
-                    ],
-                  ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
