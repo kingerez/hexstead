@@ -245,7 +245,7 @@ ApplyResult _upgrade(GameState state, Hex target) {
 }
 
 ApplyResult _bankTrade(GameState state, Resource give, Resource get) {
-  _requirePhase(state, Phase.main, 'trade');
+  _requireBankPhase(state, 'trade');
   final player = state.currentPlayer;
   if (give == get) throw IllegalActionException('pointless trade');
   final rate = Rules.effectiveTradeRate(player);
@@ -260,7 +260,7 @@ ApplyResult _bankTrade(GameState state, Resource give, Resource get) {
 }
 
 ApplyResult _buyLandmark(GameState state, String landmarkId) {
-  _requirePhase(state, Phase.main, 'buy landmark');
+  _requireBankPhase(state, 'buy landmark');
   final spec = landmarkCatalog[landmarkId];
   if (spec == null || !state.landmarkOffer.contains(landmarkId)) {
     throw IllegalActionException('landmark not available');
@@ -544,6 +544,13 @@ int _objectiveBonus(GameState state, PlayerState player) {
   final spec = objectiveCatalog[player.objectiveId];
   if (spec == null) return 0;
   return spec.isComplete(state, player.id) ? spec.bonusVp : 0;
+}
+
+/// Bank actions are allowed while awaiting a roll or in the main phase.
+void _requireBankPhase(GameState state, String what) {
+  if (state.phase != Phase.awaitingRoll && state.phase != Phase.main) {
+    throw IllegalActionException('cannot $what during ${state.phase.name}');
+  }
 }
 
 void _requirePhase(GameState state, Phase phase, String what) {

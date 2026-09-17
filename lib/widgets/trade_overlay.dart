@@ -73,8 +73,15 @@ class TradeOverlay extends StatelessWidget {
                     const SizedBox(height: 14),
                     if (sellable.isEmpty)
                       Text(
-                        'You need at least $rate of one resource to trade '
-                        'with the bank.',
+                        // With bank actions open pre-roll and in the main
+                        // phase, an empty list mid-dice means "finish the
+                        // dice", otherwise it's genuinely a resource issue.
+                        Resource.values
+                                .any((r) => human.countOf(r) >= rate)
+                            ? 'Finish resolving the dice first - then you '
+                                'can trade.'
+                            : 'You need at least $rate of one resource to '
+                                'trade with the bank.',
                         style: const TextStyle(color: Color(0xFF5A4A34)),
                       )
                     else

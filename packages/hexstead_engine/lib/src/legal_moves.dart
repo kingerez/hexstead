@@ -11,7 +11,8 @@ import 'model/terrain.dart';
 List<GameAction> legalActions(GameState state) {
   switch (state.phase) {
     case Phase.awaitingRoll:
-      return const [RollDice()];
+      // Bank actions (trade, landmark purchase) are open before rolling too.
+      return [const RollDice(), ..._bankActions(state)];
     case Phase.awaitingChoice:
       return [
         const ChooseActivation(ActivationMode.sum),
@@ -58,19 +59,7 @@ List<GameAction> _mainActions(GameState state) {
     }
   }
 
-  for (final id in state.landmarkOffer) {
-    if (player.canAfford(landmarkCatalog[id]!.cost)) {
-      actions.add(BuyLandmark(id));
-    }
-  }
-
-  for (final give in Resource.values) {
-    if (player.countOf(give) >= Rules.effectiveTradeRate(player)) {
-      for (final get in Resource.values) {
-        if (get != give) actions.add(BankTrade(give: give, get: get));
-      }
-    }
-  }
+  actions.addAll(_bankActions(state));
 
   // Bandit removal: enumerate distinct spend pairs the player can afford.
   final banditTiles = state.tiles.values
@@ -91,6 +80,26 @@ List<GameAction> _mainActions(GameState state) {
 
   actions.addAll(_cardActions(state, CardTiming.main));
 
+  return actions;
+}
+
+/// Landmark purchases and bank trades - legal before rolling and during
+/// the main phase alike.
+List<GameAction> _bankActions(GameState state) {
+  final player = state.currentPlayer;
+  final actions = <GameAction>[];
+  for (final id in state.landmarkOffer) {
+    if (player.canAfford(landmarkCatalog[id]!.cost)) {
+      actions.add(BuyLandmark(id));
+    }
+  }
+  for (final give in Resource.values) {
+    if (player.countOf(give) >= Rules.effectiveTradeRate(player)) {
+      for (final get in Resource.values) {
+        if (get != give) actions.add(BankTrade(give: give, get: get));
+      }
+    }
+  }
   return actions;
 }
 

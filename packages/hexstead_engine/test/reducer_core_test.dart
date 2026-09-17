@@ -370,9 +370,33 @@ void main() {
   });
 
   group('legal moves', () {
-    test('awaitingRoll offers only RollDice', () {
-      final actions = legalActions(fixtureState(phase: Phase.awaitingRoll));
-      expect(actions, [const RollDice()]);
+    test('awaitingRoll offers RollDice plus bank actions (trade, landmarks)',
+        () {
+      final s = fixtureState(phase: Phase.awaitingRoll)
+          .copyWith(landmarkOffer: ['trade_post']);
+      final actions = legalActions(s);
+      expect(actions, contains(const RollDice()));
+      // p0 holds 3 wood: bank trade is available pre-roll.
+      expect(actions,
+          contains(const BankTrade(give: Resource.wood, get: Resource.grain)));
+      // trade_post costs 2 wood + 2 brick, affordable pre-roll too.
+      expect(actions, contains(const BuyLandmark('trade_post')));
+      // Board actions stay post-roll.
+      expect(actions.whereType<ClaimHex>(), isEmpty);
+      expect(actions.whereType<UpgradeHex>(), isEmpty);
+    });
+
+    test('bank trade and landmark purchase apply during awaitingRoll', () {
+      final s = fixtureState(phase: Phase.awaitingRoll)
+          .copyWith(landmarkOffer: ['trade_post']);
+      final traded = apply(
+          s, const BankTrade(give: Resource.wood, get: Resource.stone));
+      expect(traded.state.phase, Phase.awaitingRoll);
+      expect(traded.state.players[0].countOf(Resource.stone), 1);
+
+      final bought = apply(s, const BuyLandmark('trade_post'));
+      expect(bought.state.phase, Phase.awaitingRoll);
+      expect(bought.state.players[0].landmarkIds, ['trade_post']);
     });
 
     test('main phase enumerates claims, upgrades, trades, end turn', () {
