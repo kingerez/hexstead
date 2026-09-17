@@ -78,15 +78,16 @@ class _SettingsOverlayState extends State<SettingsOverlay> {
                 Transform.scale(scale: scale, child: child),
             child: GestureDetector(
               onTap: () {},
-              child: Container(
+              child: Material(
+                color: const Color(0xFFF4EAD4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  side: const BorderSide(
+                      color: Color(0xFF8A6F4D), width: 2),
+                ),
+                child: Container(
                 width: 300,
                 padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF4EAD4),
-                  borderRadius: BorderRadius.circular(18),
-                  border:
-                      Border.all(color: const Color(0xFF8A6F4D), width: 2),
-                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -120,6 +121,7 @@ class _SettingsOverlayState extends State<SettingsOverlay> {
                     ),
                   ],
                 ),
+              ),
               ),
             ),
           ),
