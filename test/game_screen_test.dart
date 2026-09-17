@@ -133,6 +133,39 @@ void main() {
     expect(find.textContaining('Bank trade'), findsNothing);
   });
 
+  testWidgets('settings: gear opens card; Home asks before quitting',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final controller = GameController(
+      saveStore: InMemorySaveStore(),
+      botStepDelay: Duration.zero,
+    );
+    await controller.startNewGame(seed: 15, players: const [
+      PlayerSetup(name: 'You', isBot: false),
+      PlayerSetup(name: 'Bot', isBot: true),
+    ]);
+    await tester.pumpWidget(
+      MaterialApp(home: GameScreen(controller: controller)),
+    );
+    await dismissWelcome(tester);
+
+    await tester.tap(find.byIcon(Icons.settings));
+    await tester.pumpAndSettle();
+    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Music'), findsOneWidget);
+    expect(find.text('Sounds'), findsOneWidget);
+
+    await tester.tap(find.text('Home'));
+    await tester.pumpAndSettle();
+    expect(find.text('Leave the game?'), findsOneWidget);
+
+    // Cancel keeps us in the game.
+    await tester.tap(find.text('Keep playing'));
+    await tester.pumpAndSettle();
+    expect(find.text('Leave the game?'), findsNothing);
+    expect(find.text('Settings'), findsOneWidget);
+  });
+
   testWidgets('roll button rolls, choice buttons appear, sum resolves',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

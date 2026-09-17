@@ -11,6 +11,7 @@ import '../widgets/adjust_die_dialog.dart';
 import '../widgets/bandit_fly_overlay.dart';
 import '../widgets/card_fan_overlay.dart';
 import '../widgets/dice_roll_overlay.dart';
+import '../widgets/settings_overlay.dart';
 import '../widgets/shop_overlay.dart';
 import '../widgets/trade_overlay.dart';
 import '../widgets/production_overlay.dart';
@@ -85,9 +86,10 @@ class _GameScreenState extends State<GameScreen> {
   /// Whether the card fan is on screen (game-start reveal or icon tap).
   bool _cardFanOpen = false;
 
-  /// Landmark shop and bank trade overlays.
+  /// Landmark shop, bank trade, and settings overlays.
   bool _shopOpen = false;
   bool _tradeOpen = false;
+  bool _settingsOpen = false;
 
   /// Anchors for the fan's fly-to-icon animation.
   final GlobalKey _screenStackKey = GlobalKey();
@@ -565,6 +567,18 @@ class _GameScreenState extends State<GameScreen> {
                             ),
                           ),
                         ),
+                      // Settings gear, tucked top-left under the tips bulb.
+                      Positioned(
+                        left: 10,
+                        top: 6,
+                        child: _RoundActionButton(
+                          enabled: true,
+                          onTap: () =>
+                              setState(() => _settingsOpen = true),
+                          child: const Icon(Icons.settings,
+                              size: 22, color: Color(0xFF3A2E20)),
+                        ),
+                      ),
                       // Always-visible shop and trade buttons, floating in
                       // the board's corner so the layout never shifts.
                       Positioned(
@@ -637,6 +651,12 @@ class _GameScreenState extends State<GameScreen> {
                 _tryDispatch(BuyLandmark(id));
               },
               onClose: () => setState(() => _shopOpen = false),
+            ),
+          if (_settingsOpen)
+            SettingsOverlay(
+              onClose: () => setState(() => _settingsOpen = false),
+              onQuitToMenu: () =>
+                  Navigator.of(context).popUntil((r) => r.isFirst),
             ),
           if (_tradeOpen)
             TradeOverlay(
