@@ -168,12 +168,40 @@ class ShopOverlay extends StatelessWidget {
                         fontSize: 12, height: 1.25, color: Color(0xFF5A4A34)),
                   ),
                 ),
-                Text(
-                  spec.cost.entries
-                      .map((e) => '${e.value}${_resourceEmoji[e.key]}')
-                      .join('  '),
-                  style: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w700),
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE7D9B8),
+                    borderRadius: BorderRadius.circular(8),
+                    border:
+                        Border.all(color: const Color(0xFF8A6F4D), width: 1),
+                  ),
+                  child: Row(
+                    children: [
+                      const Text(
+                        'Cost:',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                          color: Color(0xFF7A6647),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          spec.cost.entries
+                              .map((e) =>
+                                  '${e.value} ${_resourceEmoji[e.key]}')
+                              .join('   '),
+                          style: const TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 6),
                 SizedBox(
