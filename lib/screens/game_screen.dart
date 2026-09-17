@@ -327,6 +327,16 @@ class _GameScreenState extends State<GameScreen> {
         .toSet();
   }
 
+  /// Crimson glow: rival hexes you could seize right now.
+  Set<Hex> get _seizeHighlighted {
+    if (!controller.isHumanTurn || _pendingCardId != null) return const {};
+    if (state.phase == Phase.awaitingBandit) return const {};
+    return legalActions(state)
+        .whereType<SeizeHex>()
+        .map((a) => a.target)
+        .toSet();
+  }
+
   void _onTapHex(Hex hex) {
     if (!controller.isHumanTurn) return;
     final actions = legalActions(state);
@@ -345,11 +355,57 @@ class _GameScreenState extends State<GameScreen> {
     }
     if (actions.contains(ClaimHex(hex))) {
       _tryDispatch(ClaimHex(hex));
-    } else if (actions.contains(UpgradeHex(hex))) {
-      _tryDispatch(UpgradeHex(hex));
-    } else {
-      setState(() => _selected = _selected == hex ? null : hex);
+      return;
     }
+    if (actions.contains(UpgradeHex(hex))) {
+      _tryDispatch(UpgradeHex(hex));
+      return;
+    }
+    final seize = actions
+        .whereType<SeizeHex>()
+        .where((a) => a.target == hex)
+        .toList();
+    if (seize.isNotEmpty) {
+      _confirmSeize(seize.first);
+      return;
+    }
+    setState(() => _selected = _selected == hex ? null : hex);
+  }
+
+  Future<void> _confirmSeize(SeizeHex action) async {
+    const emoji = {
+      Resource.wood: '🪵',
+      Resource.grain: '🌾',
+      Resource.brick: '🧱',
+      Resource.stone: '🪨',
+    };
+    final tile = state.tiles[action.target]!;
+    final victim = state.players[tile.ownerId!];
+    final counts = <Resource, int>{};
+    for (final r in action.spend) {
+      counts[r] = (counts[r] ?? 0) + 1;
+    }
+    final costText =
+        counts.entries.map((e) => '${e.value} ${emoji[e.key]}').join('  ');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Seize from ${victim.name}?'),
+        content: Text(
+            'Take their Level-${tile.level} hex for:\n\n$costText'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Seize'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) await _tryDispatch(action);
   }
 
   /// One short sentence about the current moment; null hides the balloon.
@@ -390,8 +446,17 @@ class _GameScreenState extends State<GameScreen> {
         if (canUpgrade) {
           return 'Upgrade a glowing hex - x2 output, more points.';
         }
+        final canSeize = actions.any((a) => a is SeizeHex);
+        if (canSeize) {
+          return 'No free land left - seize a crimson rival hex!';
+        }
         if (canTrade) {
           return 'Trade spare resources (handshake) to fund an upgrade.';
+        }
+        final boardFull =
+            state.tiles.values.every((t) => t.ownerId != null);
+        if (boardFull) {
+          return 'Save up 5+ resources to seize a rival hex.';
         }
         return 'Save up for an upgrade (2 grain + 1 stone).';
       case Phase.gameOver:
@@ -427,6 +492,7 @@ class _GameScreenState extends State<GameScreen> {
                         state: state,
                         highlighted: _highlighted,
                         upgradeHighlighted: _upgradeHighlighted,
+                        seizeHighlighted: _seizeHighlighted,
                         selected: _selected,
                         hideBanditAt: _banditFlyTarget,
                         onTapHex: _onTapHex,

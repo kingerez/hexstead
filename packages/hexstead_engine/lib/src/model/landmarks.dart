@@ -96,7 +96,7 @@ const landmarkCatalog = <String, LandmarkSpec>{
   'watchtower': LandmarkSpec(
     id: 'watchtower',
     name: 'Watchtower',
-    description: 'Rivals\' cards cannot target you or your tiles.',
+    description: 'Rivals\' cards cannot target you, and your hexes cannot be seized.',
     cost: {Resource.stone: 2, Resource.brick: 1},
     vp: 1,
   ),

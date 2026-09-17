@@ -1,4 +1,5 @@
 import 'actions.dart';
+import 'hex/hex.dart';
 import 'model/cards.dart';
 import 'model/game_state.dart';
 import 'model/player.dart';
@@ -79,8 +80,50 @@ List<GameAction> _mainActions(GameState state) {
   }
 
   actions.addAll(_cardActions(state, CardTiming.main));
+  actions.addAll(_seizeActions(state));
 
   return actions;
+}
+
+/// Once all land is claimed: one seize per adjacent rival hex, paid with a
+/// canonical greedy spend (most abundant resources first).
+List<GameAction> _seizeActions(GameState state) {
+  if (state.tiles.values.any((t) => t.ownerId == null)) return const [];
+  final player = state.currentPlayer;
+  final actions = <GameAction>[];
+  final targets = <Hex>{};
+  for (final tile in state.tiles.values) {
+    if (tile.ownerId != player.id) continue;
+    for (final nb in tile.coord.neighbors) {
+      final nbTile = state.tiles[nb];
+      if (nbTile == null || nbTile.ownerId == null) continue;
+      if (nbTile.ownerId == player.id) continue;
+      if (state.players[nbTile.ownerId!].hasLandmark('watchtower')) continue;
+      targets.add(nb);
+    }
+  }
+  for (final target in targets) {
+    final cost = Rules.seizeCost(state.tiles[target]!.level);
+    final spend = _greedySpend(player, cost);
+    if (spend != null) actions.add(SeizeHex(target, spend: spend));
+  }
+  return actions;
+}
+
+/// Picks [count] resources from the most abundant piles first; null when
+/// the player cannot pay.
+List<Resource>? _greedySpend(PlayerState player, int count) {
+  if (player.totalResources < count) return null;
+  final piles = [
+    for (final r in Resource.values) (r, player.countOf(r)),
+  ]..sort((a, b) => b.$2 != a.$2 ? b.$2 - a.$2 : a.$1.index - b.$1.index);
+  final spend = <Resource>[];
+  for (final (resource, available) in piles) {
+    for (var i = 0; i < available && spend.length < count; i++) {
+      spend.add(resource);
+    }
+  }
+  return spend.length == count ? spend : null;
 }
 
 /// Landmark purchases and bank trades - legal before rolling and during

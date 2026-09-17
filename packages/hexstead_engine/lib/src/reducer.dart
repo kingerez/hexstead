@@ -41,6 +41,7 @@ ApplyResult apply(GameState state, GameAction action) {
     UpgradeHex(:final target) => _upgrade(state, target),
     BankTrade(:final give, :final get) => _bankTrade(state, give, get),
     BuyLandmark(:final landmarkId) => _buyLandmark(state, landmarkId),
+    SeizeHex(:final target, :final spend) => _seize(state, target, spend),
     PlayCard() => _playCard(state, action),
     EndTurn() => _endTurn(state),
   };
@@ -241,6 +242,55 @@ ApplyResult _upgrade(GameState state, Hex target) {
     target: tile.copyWith(level: 2),
   });
   final events = <GameEvent>[HexUpgraded(target, player.id)];
+  return _checkInstantWin(next, events);
+}
+
+/// True when every tile on the board has an owner - the trigger that opens
+/// late-game aggression.
+bool _boardFull(GameState state) =>
+    state.tiles.values.every((t) => t.ownerId != null);
+
+ApplyResult _seize(GameState state, Hex target, List<Resource> spend) {
+  _requirePhase(state, Phase.main, 'seize');
+  if (!_boardFull(state)) {
+    throw IllegalActionException('seizing opens once all land is claimed');
+  }
+  final player = state.currentPlayer;
+  final tile = state.tiles[target];
+  if (tile == null || tile.ownerId == null || tile.ownerId == player.id) {
+    throw IllegalActionException('seize targets a rival hex');
+  }
+  if (state.players[tile.ownerId!].hasLandmark('watchtower')) {
+    throw IllegalActionException('the watchtower protects those lands');
+  }
+  final adjacent =
+      target.neighbors.any((nb) => state.tiles[nb]?.ownerId == player.id);
+  if (!adjacent) {
+    throw IllegalActionException('seize must border your territory');
+  }
+  final cost = Rules.seizeCost(tile.level);
+  if (spend.length != cost) {
+    throw IllegalActionException('seizing this hex costs $cost resources');
+  }
+  final costMap = <Resource, int>{};
+  for (final r in spend) {
+    costMap[r] = (costMap[r] ?? 0) + 1;
+  }
+  if (!player.canAfford(costMap)) {
+    throw IllegalActionException('cannot afford the seizure');
+  }
+  final previousOwner = tile.ownerId!;
+  var next = state.withPlayer(
+    player.id,
+    (p) => p.copyWith(
+        resources:
+            p.resourcesApplying(costMap.map((k, v) => MapEntry(k, -v)))),
+  );
+  next = next.copyWith(tiles: {
+    ...next.tiles,
+    target: tile.copyWith(ownerId: player.id),
+  });
+  final events = <GameEvent>[HexSeized(target, previousOwner, player.id)];
   return _checkInstantWin(next, events);
 }
 

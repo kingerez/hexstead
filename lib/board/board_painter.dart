@@ -12,6 +12,9 @@ class BoardPainter extends CustomPainter {
   /// Owned hexes that can be upgraded: glow in their owner's color so the
   /// signal reads differently from claimable (amber) hexes.
   final Set<Hex> upgradeHighlighted;
+
+  /// Rival hexes that can be seized (board full): crimson glow.
+  final Set<Hex> seizeHighlighted;
   final Hex? selected;
 
   /// Suppresses the painted bandit on this hex while its fly-in animation
@@ -22,6 +25,7 @@ class BoardPainter extends CustomPainter {
     required this.state,
     this.highlighted = const {},
     this.upgradeHighlighted = const {},
+    this.seizeHighlighted = const {},
     this.selected,
     this.hideBanditAt,
   });
@@ -185,6 +189,25 @@ class BoardPainter extends CustomPainter {
       );
     }
 
+    // Seizable rival tiles burn crimson - late-game aggression.
+    if (seizeHighlighted.contains(tile.coord)) {
+      canvas.drawPath(
+        path,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = hexSize * 0.16
+          ..color = const Color(0xFFE05252)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+      );
+      canvas.drawPath(
+        path,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = hexSize * 0.05
+          ..color = const Color(0xFFFFDADA),
+      );
+    }
+
     // Claimable (and targetable) tiles get an unmissable amber glow.
     if (highlighted.contains(tile.coord)) {
       canvas.drawPath(
@@ -226,6 +249,7 @@ class BoardPainter extends CustomPainter {
       old.state != state ||
       old.highlighted != highlighted ||
       old.upgradeHighlighted != upgradeHighlighted ||
+      old.seizeHighlighted != seizeHighlighted ||
       old.selected != selected ||
       old.hideBanditAt != hideBanditAt;
 }

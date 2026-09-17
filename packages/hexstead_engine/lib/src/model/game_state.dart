@@ -17,6 +17,10 @@ abstract final class Rules {
   static const claimCost = {Resource.wood: 1, Resource.brick: 1};
   static const upgradeCost = {Resource.grain: 2, Resource.stone: 1};
   static const banditRemovalCount = 2;
+
+  /// Seizing a rival hex (board full only): 5 resources, +3 per level
+  /// above 1.
+  static int seizeCost(int level) => 5 + 3 * (level - 1);
   static const bankTradeRate = 3;
   static const startingResources = {Resource.wood: 2, Resource.brick: 2};
   static const defaultTargetVp = 15;

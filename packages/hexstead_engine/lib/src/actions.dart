@@ -152,6 +152,24 @@ class PlayCard extends GameAction {
       PlayCard, cardId, targetHex, targetPlayer, dieIndex, delta, resource);
 }
 
+class SeizeHex extends GameAction {
+  final Hex target;
+
+  /// The resources paid (seize cost depends on the hex's level).
+  final List<Resource> spend;
+
+  const SeizeHex(this.target, {required this.spend});
+
+  @override
+  bool operator ==(Object other) =>
+      other is SeizeHex &&
+      other.target == target &&
+      const ListEquality<Resource>().equals(other.spend, spend);
+
+  @override
+  int get hashCode => Object.hash(SeizeHex, target, Object.hashAll(spend));
+}
+
 class EndTurn extends GameAction {
   const EndTurn();
 

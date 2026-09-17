@@ -99,6 +99,14 @@ class LandmarkIncome extends GameEvent {
   const LandmarkIncome(this.playerId, this.resource);
 }
 
+class HexSeized extends GameEvent {
+  final Hex target;
+  final int fromPlayer;
+  final int toPlayer;
+
+  const HexSeized(this.target, this.fromPlayer, this.toPlayer);
+}
+
 class TurnEnded extends GameEvent {
   final int nextPlayerIndex;
 

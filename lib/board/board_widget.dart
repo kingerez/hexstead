@@ -8,6 +8,7 @@ class BoardWidget extends StatelessWidget {
   final GameState state;
   final Set<Hex> highlighted;
   final Set<Hex> upgradeHighlighted;
+  final Set<Hex> seizeHighlighted;
   final Hex? selected;
   final void Function(Hex)? onTapHex;
   final void Function(Hex)? onLongPressHex;
@@ -18,6 +19,7 @@ class BoardWidget extends StatelessWidget {
     required this.state,
     this.highlighted = const {},
     this.upgradeHighlighted = const {},
+    this.seizeHighlighted = const {},
     this.selected,
     this.onTapHex,
     this.onLongPressHex,
@@ -44,6 +46,7 @@ class BoardWidget extends StatelessWidget {
               state: state,
               highlighted: highlighted,
               upgradeHighlighted: upgradeHighlighted,
+              seizeHighlighted: seizeHighlighted,
               selected: selected,
               hideBanditAt: hideBanditAt,
             ),
