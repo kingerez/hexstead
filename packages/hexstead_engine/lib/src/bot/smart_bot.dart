@@ -27,6 +27,7 @@ abstract final class SmartBot {
         outcome,
         me,
         includeObjective: difficulty != BotDifficulty.easy,
+        includeRivals: difficulty != BotDifficulty.easy,
       );
       value += _noise(state, index) * _noiseAmplitude(difficulty);
       if (value > bestValue) {
@@ -53,12 +54,12 @@ abstract final class SmartBot {
   static bool _overlooked(
       GameState state, BotDifficulty difficulty, int index, int count) {
     if (difficulty != BotDifficulty.easy || count <= 2) return false;
-    return _hash(state.seed, state.round * 100 + index) % 2 == 0;
+    return _hash(state.seed, state.round * 100 + index) % 3 != 2;
   }
 
   static double _noiseAmplitude(BotDifficulty difficulty) =>
       switch (difficulty) {
-        BotDifficulty.easy => 25.0,
+        BotDifficulty.easy => 45.0,
         BotDifficulty.medium => 5.0,
         BotDifficulty.hard => 0.5,
       };

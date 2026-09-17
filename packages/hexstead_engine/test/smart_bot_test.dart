@@ -90,6 +90,48 @@ void main() {
       expect(SmartBot.chooseAction(s), const ClaimHex(Hex(1, 0)));
     });
 
+
+    test('places the bandit where it hurts a rival, never on the desert', () {
+      const tilesSpec = [
+        // Rival's strong tile: forest #8 village.
+        (Hex(0, 0), TerrainType.forest, 8, 1, 2),
+        // Rival-owned desert: blocking it achieves nothing.
+        (Hex(1, 0), TerrainType.desert, null, 1, 1),
+        // Rival's weak tile.
+        (Hex(0, 1), TerrainType.field, 2, 1, 1),
+        // Bot's own tile - blocking yourself would be absurd.
+        (Hex(1, -1), TerrainType.mountain, 6, 0, 1),
+      ];
+      final s = GameState(
+        seed: 1,
+        rng: GameRng(1),
+        round: 3,
+        roundCap: 15,
+        targetVp: 99,
+        currentPlayerIndex: 0,
+        phase: Phase.awaitingBandit,
+        tiles: {
+          for (final (coord, terrain, number, owner, level) in tilesSpec)
+            coord: Tile(
+                coord: coord,
+                terrain: terrain,
+                number: number,
+                ownerId: owner,
+                level: level),
+        },
+        players: [
+          const PlayerState(
+              id: 0,
+              name: 'A',
+              isBot: true,
+              difficulty: BotDifficulty.hard),
+          const PlayerState(id: 1, name: 'B', isBot: true),
+        ],
+        landmarkOffer: const [],
+        lastDice: (3, 4),
+      );
+      expect(SmartBot.chooseAction(s), const PlaceBandit(Hex(0, 0)));
+    });
     test('hard beats easy convincingly over many games', () {
       var hardWins = 0;
       const games = 40;

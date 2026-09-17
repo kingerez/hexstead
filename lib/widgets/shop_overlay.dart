@@ -197,7 +197,9 @@ class ShopOverlay extends StatelessWidget {
                                   '${e.value} ${_resourceEmoji[e.key]}')
                               .join('   '),
                           style: const TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.w800),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF3A2E20)),
                         ),
                       ),
                     ],

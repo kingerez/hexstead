@@ -9,7 +9,7 @@ import '../scoring.dart';
 /// Weighted heuristic evaluation of [state] from [playerId]'s seat.
 /// Pure function: never touches the game RNG.
 double evaluate(GameState state, int playerId,
-    {bool includeObjective = true}) {
+    {bool includeObjective = true, bool includeRivals = true}) {
   final player = state.players[playerId];
   final roundsLeft = (state.roundCap - state.round + 1).clamp(1, 99);
 
@@ -20,6 +20,16 @@ double evaluate(GameState state, int playerId,
 
   // Expected production per round, worth more with more rounds left.
   value += _expectedProduction(state, playerId) * 2.0 * roundsLeft;
+
+  // Rivals' engines hurt: this is what makes bandit placement (and the
+  // sum-vs-split choice) consider what OTHERS gain, not just ourselves.
+  // Easy bots are self-absorbed and skip it.
+  if (includeRivals) {
+    for (final rival in state.players) {
+      if (rival.id == playerId) continue;
+      value -= _expectedProduction(state, rival.id) * 0.6 * roundsLeft;
+    }
+  }
 
   // Room to grow: frontier tiles we could claim.
   value += _frontierSize(state, playerId) * 0.4;
