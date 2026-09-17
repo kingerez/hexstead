@@ -143,6 +143,11 @@ List<GameAction> _bankActions(GameState state) {
       }
     }
   }
+  if (!player.cardReplacedThisGame && state.deck.isNotEmpty) {
+    for (final cardId in player.hand.toSet()) {
+      actions.add(ReplaceCard(cardId));
+    }
+  }
   return actions;
 }
 

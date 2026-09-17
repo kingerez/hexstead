@@ -170,6 +170,19 @@ class SeizeHex extends GameAction {
   int get hashCode => Object.hash(SeizeHex, target, Object.hashAll(spend));
 }
 
+class ReplaceCard extends GameAction {
+  final String cardId;
+
+  const ReplaceCard(this.cardId);
+
+  @override
+  bool operator ==(Object other) =>
+      other is ReplaceCard && other.cardId == cardId;
+
+  @override
+  int get hashCode => Object.hash(ReplaceCard, cardId);
+}
+
 class EndTurn extends GameAction {
   const EndTurn();
 

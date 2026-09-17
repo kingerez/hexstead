@@ -42,6 +42,7 @@ ApplyResult apply(GameState state, GameAction action) {
     BankTrade(:final give, :final get) => _bankTrade(state, give, get),
     BuyLandmark(:final landmarkId) => _buyLandmark(state, landmarkId),
     SeizeHex(:final target, :final spend) => _seize(state, target, spend),
+    ReplaceCard(:final cardId) => _replaceCard(state, cardId),
     PlayCard() => _playCard(state, action),
     EndTurn() => _endTurn(state),
   };
@@ -333,6 +334,31 @@ ApplyResult _buyLandmark(GameState state, String landmarkId) {
   );
   final events = <GameEvent>[LandmarkPurchased(landmarkId, player.id)];
   return _checkInstantWin(next, events);
+}
+
+/// The once-per-game mulligan: discard one card, draw a fresh one from the
+/// deck. Free, and separate from the one-card-per-turn play limit.
+ApplyResult _replaceCard(GameState state, String cardId) {
+  _requireBankPhase(state, 'replace a card');
+  final player = state.currentPlayer;
+  if (player.cardReplacedThisGame) {
+    throw IllegalActionException('you already replaced a card this game');
+  }
+  if (!player.hand.contains(cardId)) {
+    throw IllegalActionException('card not in hand');
+  }
+  if (state.deck.isEmpty) {
+    throw IllegalActionException('the deck is empty');
+  }
+  final drawIndex = state.rng.nextInt(state.deck.length);
+  final drawn = state.deck[drawIndex];
+  final deck = [...state.deck]..removeAt(drawIndex);
+  var next = state.withPlayer(player.id, (p) {
+    final hand = [...p.hand]..remove(cardId);
+    return p.copyWith(hand: [...hand, drawn], cardReplacedThisGame: true);
+  });
+  next = next.copyWith(deck: deck);
+  return ApplyResult(next, [CardReplaced(player.id)]);
 }
 
 ApplyResult _playCard(GameState state, PlayCard action) {

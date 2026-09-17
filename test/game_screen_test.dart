@@ -133,6 +133,37 @@ void main() {
     expect(find.textContaining('Bank trade'), findsNothing);
   });
 
+  testWidgets('a card can be swapped once per game from the fan',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final controller = GameController(
+      saveStore: InMemorySaveStore(),
+      botStepDelay: Duration.zero,
+    );
+    await controller.startNewGame(seed: 16, players: const [
+      PlayerSetup(name: 'You', isBot: false),
+      PlayerSetup(name: 'Bot', isBot: true),
+    ]);
+    await tester.pumpWidget(
+      MaterialApp(home: GameScreen(controller: controller)),
+    );
+    await dismissWelcome(tester);
+
+    await tester.tap(find.byType(CardFanIcon));
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.swap_horiz), findsNWidgets(3));
+
+    final before = [...controller.state!.players.first.hand];
+    await tester.tap(find.byIcon(Icons.swap_horiz).first);
+    await tester.pumpAndSettle();
+
+    final after = controller.state!.players.first.hand;
+    expect(after, isNot(equals(before)));
+    expect(after.length, 3);
+    // One-shot: swap icons are gone.
+    expect(find.byIcon(Icons.swap_horiz), findsNothing);
+  });
+
   testWidgets('settings: gear opens card; Home asks before quitting',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

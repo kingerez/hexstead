@@ -47,7 +47,7 @@ void main() {
     final summary =
         '${end.round}/${end.winnerId}/${end.diceHistory.length}/$digest';
     // If a rules change legitimately alters this, re-record the value.
-    expect(summary, '15/0/45/3170359430');
+    expect(summary, '15/2/46/3075251381');
   });
 }
 

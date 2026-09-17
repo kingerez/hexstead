@@ -10,6 +10,10 @@ class CardFanOverlay extends StatefulWidget {
   /// Card ids with at least one legal play right now.
   final Set<String> playableCardIds;
 
+  /// Card ids that may be swapped via the once-per-game replacement.
+  final Set<String> replaceableCardIds;
+  final void Function(String cardId)? onReplace;
+
   /// Where the fan shrinks to / grows from, relative to the fan's centered
   /// position (i.e. icon center minus screen center).
   final Offset flyOffset;
@@ -22,7 +26,9 @@ class CardFanOverlay extends StatefulWidget {
     required this.onDone,
     required this.flyOffset,
     this.playableCardIds = const {},
+    this.replaceableCardIds = const {},
     this.onPlay,
+    this.onReplace,
   });
 
   @override
@@ -87,6 +93,18 @@ class _CardFanOverlayState extends State<CardFanOverlay>
                         opacity: (1 - flyT).clamp(0.0, 1.0),
                         child: const _OutlinedTitle('Your cards'),
                       ),
+                      if (widget.replaceableCardIds.isNotEmpty)
+                        Opacity(
+                          opacity: (1 - flyT).clamp(0.0, 1.0),
+                          child: const Padding(
+                            padding: EdgeInsets.only(top: 4),
+                            child: Text(
+                              'Tap a card\'s ⇄ to swap it - once per game',
+                              style: TextStyle(
+                                  color: Colors.white70, fontSize: 12),
+                            ),
+                          ),
+                        ),
                       const SizedBox(height: 18),
                       if (widget.cardIds.isEmpty)
                         const Text(
@@ -125,6 +143,7 @@ class _CardFanOverlayState extends State<CardFanOverlay>
   Widget _card(String id, bool settled) {
     final spec = cardCatalog[id]!;
     final playable = widget.playableCardIds.contains(id);
+    final replaceable = widget.replaceableCardIds.contains(id);
     return Container(
       width: 108,
       height: 176,
@@ -142,15 +161,33 @@ class _CardFanOverlayState extends State<CardFanOverlay>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            spec.name,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF3A2E20),
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  spec.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF3A2E20),
+                  ),
+                ),
+              ),
+              if (replaceable)
+                InkWell(
+                  onTap: settled
+                      ? () => widget.onReplace?.call(id)
+                      : null,
+                  child: const Padding(
+                    padding: EdgeInsets.only(left: 2),
+                    child: Icon(Icons.swap_horiz,
+                        size: 18, color: Color(0xFF9A6B1F)),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 6),
           Expanded(

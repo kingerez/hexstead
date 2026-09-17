@@ -20,6 +20,7 @@ Map<String, dynamic> gameStateToJson(GameState s) => {
       'tiles': [for (final t in s.tiles.values) _tileToJson(t)],
       'players': [for (final p in s.players) _playerToJson(p)],
       'landmarkOffer': s.landmarkOffer,
+      'deck': s.deck,
       'lastDice': s.lastDice == null ? null : [s.lastDice!.$1, s.lastDice!.$2],
       'diceHistory': [
         for (final (d1, d2) in s.diceHistory) [d1, d2],
@@ -49,6 +50,7 @@ GameState gameStateFromJson(Map<String, dynamic> json) {
         _playerFromJson(p as Map<String, dynamic>),
     ],
     landmarkOffer: (json['landmarkOffer'] as List).cast<String>(),
+    deck: ((json['deck'] ?? const []) as List).cast<String>(),
     lastDice:
         lastDice == null ? null : (lastDice[0] as int, lastDice[1] as int),
     diceHistory: [
@@ -92,6 +94,7 @@ Map<String, dynamic> _playerToJson(PlayerState p) => {
       'objectiveId': p.objectiveId,
       'landmarkIds': p.landmarkIds,
       'cardPlayedThisTurn': p.cardPlayedThisTurn,
+      'cardReplacedThisGame': p.cardReplacedThisGame,
     };
 
 PlayerState _playerFromJson(Map<String, dynamic> json) => PlayerState(
@@ -107,4 +110,6 @@ PlayerState _playerFromJson(Map<String, dynamic> json) => PlayerState(
       objectiveId: json['objectiveId'] as String?,
       landmarkIds: (json['landmarkIds'] as List).cast<String>(),
       cardPlayedThisTurn: json['cardPlayedThisTurn'] as bool,
+      cardReplacedThisGame:
+          (json['cardReplacedThisGame'] ?? false) as bool,
     );

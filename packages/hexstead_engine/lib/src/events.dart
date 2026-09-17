@@ -107,6 +107,12 @@ class HexSeized extends GameEvent {
   const HexSeized(this.target, this.fromPlayer, this.toPlayer);
 }
 
+class CardReplaced extends GameEvent {
+  final int playerId;
+
+  const CardReplaced(this.playerId);
+}
+
 class TurnEnded extends GameEvent {
   final int nextPlayerIndex;
 

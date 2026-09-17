@@ -636,6 +636,13 @@ class _GameScreenState extends State<GameScreen> {
                       .map((a) => a.cardId)
                       .toSet()
                   : const {},
+              replaceableCardIds: controller.isHumanTurn
+                  ? legalActions(state)
+                      .whereType<ReplaceCard>()
+                      .map((a) => a.cardId)
+                      .toSet()
+                  : const {},
+              onReplace: (id) => _tryDispatch(ReplaceCard(id)),
               onPlay: _handleCardPlay,
               onDone: () => setState(() => _cardFanOpen = false),
             ),

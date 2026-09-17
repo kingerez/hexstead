@@ -53,6 +53,9 @@ class GameState {
 
   /// Landmark ids purchasable this game, first come first served.
   final List<String> landmarkOffer;
+
+  /// Undealt action cards, drawn from by card replacement.
+  final List<String> deck;
   final (int, int)? lastDice;
   final List<(int, int)> diceHistory;
   final int? winnerId;
@@ -71,6 +74,7 @@ class GameState {
     required this.tiles,
     required this.players,
     required this.landmarkOffer,
+    this.deck = const [],
     this.lastDice,
     this.diceHistory = const [],
     this.winnerId,
@@ -103,6 +107,7 @@ class GameState {
       for (var i = 0; i < players.length; i++)
         deck.sublist(i * startingHandSize, (i + 1) * startingHandSize),
     ];
+    final remainingDeck = deck.sublist(players.length * startingHandSize);
     final landmarkPool = landmarkCatalog.keys.toList();
     rng.shuffle(landmarkPool);
     final offer = landmarkPool.take(landmarkOfferSize).toList();
@@ -134,6 +139,7 @@ class GameState {
           ),
       ],
       landmarkOffer: offer,
+      deck: remainingDeck,
     );
   }
 
@@ -168,6 +174,7 @@ class GameState {
     Map<Hex, Tile>? tiles,
     List<PlayerState>? players,
     List<String>? landmarkOffer,
+    List<String>? deck,
     (int, int)? Function()? lastDice,
     List<(int, int)>? diceHistory,
     int? Function()? winnerId,
@@ -183,6 +190,7 @@ class GameState {
         tiles: tiles ?? this.tiles,
         players: players ?? this.players,
         landmarkOffer: landmarkOffer ?? this.landmarkOffer,
+        deck: deck ?? this.deck,
         lastDice: lastDice != null ? lastDice() : this.lastDice,
         diceHistory: diceHistory ?? this.diceHistory,
         winnerId: winnerId != null ? winnerId() : this.winnerId,

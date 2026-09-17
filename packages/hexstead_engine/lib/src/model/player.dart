@@ -34,6 +34,9 @@ class PlayerState {
   final List<String> landmarkIds;
   final bool cardPlayedThisTurn;
 
+  /// The once-per-game card mulligan.
+  final bool cardReplacedThisGame;
+
   const PlayerState({
     required this.id,
     required this.name,
@@ -44,6 +47,7 @@ class PlayerState {
     this.objectiveId,
     this.landmarkIds = const [],
     this.cardPlayedThisTurn = false,
+    this.cardReplacedThisGame = false,
   });
 
   int countOf(Resource r) => resources[r] ?? 0;
@@ -59,6 +63,7 @@ class PlayerState {
     String? objectiveId,
     List<String>? landmarkIds,
     bool? cardPlayedThisTurn,
+    bool? cardReplacedThisGame,
   }) =>
       PlayerState(
         id: id,
@@ -70,6 +75,8 @@ class PlayerState {
         objectiveId: objectiveId ?? this.objectiveId,
         landmarkIds: landmarkIds ?? this.landmarkIds,
         cardPlayedThisTurn: cardPlayedThisTurn ?? this.cardPlayedThisTurn,
+        cardReplacedThisGame:
+            cardReplacedThisGame ?? this.cardReplacedThisGame,
       );
 
   /// Returns resources with [delta] applied (negative to spend).
