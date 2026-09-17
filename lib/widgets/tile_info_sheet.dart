@@ -86,7 +86,7 @@ class TileInfoSheet extends StatelessWidget {
                   else ...[
                     Text('Produces ${BoardPainter.terrainEmoji[tile.terrain]} '
                         '${_resourceNames[resource]}'
-                        '${tile.level == 2 ? ' ×2 (village)' : ''}'),
+                        '${tile.level == 2 ? ' x2 (Level 2)' : ''}'),
                     const SizedBox(height: 4),
                     Text(
                       'Pays out when ANY player rolls $number '
@@ -109,7 +109,7 @@ class TileInfoSheet extends StatelessWidget {
                         Flexible(
                           child: Text(
                             '${owner.isBot ? owner.name : 'Yours'} - '
-                            '${tile.level == 1 ? 'camp (upgrade to village: 🌾2 🪨1)' : 'village - ×2 production (double ring)'}',
+                            '${tile.level == 1 ? 'Level 1 - upgrade for 🌾2 🪨1 to double output' : 'Level 2 - x2 production (double ring)'}',
                           ),
                         ),
                       ],

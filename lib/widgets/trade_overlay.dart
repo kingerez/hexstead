@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
 
-/// Bank trade as a centered card: one row per resource you can sell, with
-/// a button for each resource you could buy with it.
-class TradeOverlay extends StatelessWidget {
+/// Bank trade in two steps: pick which resource to sell (only ones you hold
+/// enough of are shown), then pick what to buy with it.
+class TradeOverlay extends StatefulWidget {
   final GameState state;
 
   /// The trades that are legal right now.
@@ -19,6 +19,13 @@ class TradeOverlay extends StatelessWidget {
     required this.onClose,
   });
 
+  @override
+  State<TradeOverlay> createState() => _TradeOverlayState();
+}
+
+class _TradeOverlayState extends State<TradeOverlay> {
+  Resource? _give;
+
   static const _resourceEmoji = {
     Resource.wood: '🪵',
     Resource.grain: '🌾',
@@ -28,16 +35,16 @@ class TradeOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final human = state.players.firstWhere((p) => !p.isBot);
+    final human = widget.state.players.firstWhere((p) => !p.isBot);
     final rate = Rules.effectiveTradeRate(human);
-    final sellable =
-        legalTrades.map((t) => t.give).toSet().toList()
-          ..sort((a, b) => a.index.compareTo(b.index));
+    final sellable = widget.legalTrades.map((t) => t.give).toSet().toList()
+      ..sort((a, b) => a.index.compareTo(b.index));
+    if (_give != null && !sellable.contains(_give)) _give = null;
 
     return Positioned.fill(
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: onClose,
+        onTap: widget.onClose,
         child: Container(
           color: Colors.black.withValues(alpha: 0.55),
           alignment: Alignment.center,
@@ -56,7 +63,8 @@ class TradeOverlay extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: const Color(0xFFF4EAD4),
                   borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: const Color(0xFF8A6F4D), width: 2),
+                  border:
+                      Border.all(color: const Color(0xFF8A6F4D), width: 2),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -73,9 +81,6 @@ class TradeOverlay extends StatelessWidget {
                     const SizedBox(height: 14),
                     if (sellable.isEmpty)
                       Text(
-                        // With bank actions open pre-roll and in the main
-                        // phase, an empty list mid-dice means "finish the
-                        // dice", otherwise it's genuinely a resource issue.
                         Resource.values
                                 .any((r) => human.countOf(r) >= rate)
                             ? 'Finish resolving the dice first - then you '
@@ -84,10 +89,27 @@ class TradeOverlay extends StatelessWidget {
                                 'trade with the bank.',
                         style: const TextStyle(color: Color(0xFF5A4A34)),
                       )
-                    else
-                      for (final give in sellable) ...[
+                    else ...[
+                      Text(
+                        'Sell $rate of:',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF3A2E20),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          for (final give in sellable)
+                            _sellChip(give, human.countOf(give)),
+                        ],
+                      ),
+                      if (_give != null) ...[
+                        const SizedBox(height: 16),
                         Text(
-                          'Sell $rate ${_resourceEmoji[give]} to buy:',
+                          'Sell $rate ${_resourceEmoji[_give]} to buy:',
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
@@ -98,10 +120,10 @@ class TradeOverlay extends StatelessWidget {
                         Wrap(
                           spacing: 8,
                           children: [
-                            for (final t in legalTrades)
-                              if (t.give == give)
+                            for (final t in widget.legalTrades)
+                              if (t.give == _give)
                                 FilledButton.tonal(
-                                  onPressed: () => onTrade(t),
+                                  onPressed: () => widget.onTrade(t),
                                   style: FilledButton.styleFrom(
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 14, vertical: 10),
@@ -115,13 +137,33 @@ class TradeOverlay extends StatelessWidget {
                                 ),
                           ],
                         ),
-                        const SizedBox(height: 14),
                       ],
+                    ],
                   ],
                 ),
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sellChip(Resource give, int count) {
+    final selected = _give == give;
+    return ChoiceChip(
+      selected: selected,
+      onSelected: (_) => setState(() => _give = selected ? null : give),
+      showCheckmark: false,
+      selectedColor: const Color(0xFF9A6B1F),
+      backgroundColor: const Color(0xFFE7D9B8),
+      side: const BorderSide(color: Color(0xFF8A6F4D)),
+      label: Text(
+        '${_resourceEmoji[give]}  $count',
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+          color: selected ? Colors.white : const Color(0xFF3A2E20),
         ),
       ),
     );

@@ -46,7 +46,7 @@ final objectiveCatalog = <String, ObjectiveSpec>{
   'mayor': ObjectiveSpec(
     id: 'mayor',
     name: 'Lord Mayor',
-    description: 'Own 3 or more villages.',
+    description: 'Own 3 or more Level-2 hexes.',
     bonusVp: 5,
     isComplete: (s, p) =>
         s.tiles.values.where((t) => t.ownerId == p && t.level >= 2).length >=

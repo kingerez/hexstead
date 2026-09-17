@@ -103,7 +103,7 @@ const landmarkCatalog = <String, LandmarkSpec>{
   'keep': LandmarkSpec(
     id: 'keep',
     name: 'The Keep',
-    description: 'Worth +1 point per village you own at game end.',
+    description: 'Worth +1 point per Level-2 hex you own at game end.',
     cost: {Resource.stone: 3, Resource.brick: 2},
     vp: 1,
   ),

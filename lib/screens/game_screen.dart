@@ -195,11 +195,16 @@ class _GameScreenState extends State<GameScreen> {
     if (rolls.isNotEmpty) {
       final roll = rolls.first;
       final isBot = state.currentPlayer.isBot;
+      // Once every hex is claimed the game is about tempo - tighten the
+      // dice ceremony so late rounds stop dragging.
+      final boardFull = state.tiles.values.every((t) => t.ownerId != null);
       final completer = Completer<void>();
       setState(() {
         _rollingDice = (roll.d1, roll.d2);
-        _rollDuration = Duration(milliseconds: isBot ? 800 : 1200);
-        _holdDuration = Duration(milliseconds: isBot ? 500 : 1000);
+        _rollDuration = Duration(
+            milliseconds: boardFull ? (isBot ? 450 : 800) : (isBot ? 800 : 1200));
+        _holdDuration = Duration(
+            milliseconds: boardFull ? (isBot ? 250 : 500) : (isBot ? 500 : 1000));
         _rollCompleter = completer;
       });
       await completer.future;
@@ -293,6 +298,7 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
+  /// Amber glow: claimable tiles, bandit targets, card targets.
   Set<Hex> get _highlighted {
     if (!controller.isHumanTurn) return const {};
     final actions = legalActions(state);
@@ -306,11 +312,19 @@ class _GameScreenState extends State<GameScreen> {
     return {
       if (state.phase == Phase.awaitingBandit)
         ...actions.whereType<PlaceBandit>().map((a) => a.target)
-      else ...[
+      else
         ...actions.whereType<ClaimHex>().map((a) => a.target),
-        ...actions.whereType<UpgradeHex>().map((a) => a.target),
-      ],
     };
+  }
+
+  /// Owner-color glow: your tiles that can be upgraded right now.
+  Set<Hex> get _upgradeHighlighted {
+    if (!controller.isHumanTurn || _pendingCardId != null) return const {};
+    if (state.phase == Phase.awaitingBandit) return const {};
+    return legalActions(state)
+        .whereType<UpgradeHex>()
+        .map((a) => a.target)
+        .toSet();
   }
 
   void _onTapHex(Hex hex) {
@@ -345,8 +359,13 @@ class _GameScreenState extends State<GameScreen> {
     if (!controller.isHumanTurn) {
       return 'Rival rolls pay you too - your hexes always earn.';
     }
+    final actions = legalActions(state);
+    final canBuyLandmark = actions.any((a) => a is BuyLandmark);
     switch (state.phase) {
       case Phase.awaitingRoll:
+        if (canBuyLandmark) {
+          return 'You can afford a landmark - tap the shop before rolling!';
+        }
         return 'Roll - every hex matching the dice pays its owner.';
       case Phase.awaitingChoice:
         final (d1, d2) = state.lastDice!;
@@ -356,19 +375,25 @@ class _GameScreenState extends State<GameScreen> {
       case Phase.awaitingBandit:
         return 'Drop the bandit on a rival hex to block it.';
       case Phase.main:
-        final actions = legalActions(state);
         final canClaim = actions.any((a) => a is ClaimHex);
         final canUpgrade = actions.any((a) => a is UpgradeHex);
+        final canTrade = actions.any((a) => a is BankTrade);
+        if (canBuyLandmark) {
+          return 'You can afford a landmark - tap the shop!';
+        }
         if (canClaim && canUpgrade) {
-          return 'Claim a glowing hex, or upgrade yours to produce x2.';
+          return 'Claim an amber hex, or upgrade a glowing one of yours.';
         }
         if (canClaim) {
           return 'Claim a glowing hex for 1 wood + 1 brick.';
         }
         if (canUpgrade) {
-          return 'Upgrade a glowing hex you own - x2 output, more points.';
+          return 'Upgrade a glowing hex - x2 output, more points.';
         }
-        return 'Save up - big connected regions score big.';
+        if (canTrade) {
+          return 'Trade spare resources (handshake) to fund an upgrade.';
+        }
+        return 'Save up for an upgrade (2 grain + 1 stone).';
       case Phase.gameOver:
         return null;
     }
@@ -401,6 +426,7 @@ class _GameScreenState extends State<GameScreen> {
                       BoardWidget(
                         state: state,
                         highlighted: _highlighted,
+                        upgradeHighlighted: _upgradeHighlighted,
                         selected: _selected,
                         hideBanditAt: _banditFlyTarget,
                         onTapHex: _onTapHex,

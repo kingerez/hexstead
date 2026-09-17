@@ -7,6 +7,7 @@ import 'board_painter.dart';
 class BoardWidget extends StatelessWidget {
   final GameState state;
   final Set<Hex> highlighted;
+  final Set<Hex> upgradeHighlighted;
   final Hex? selected;
   final void Function(Hex)? onTapHex;
   final void Function(Hex)? onLongPressHex;
@@ -16,6 +17,7 @@ class BoardWidget extends StatelessWidget {
     super.key,
     required this.state,
     this.highlighted = const {},
+    this.upgradeHighlighted = const {},
     this.selected,
     this.onTapHex,
     this.onLongPressHex,
@@ -41,6 +43,7 @@ class BoardWidget extends StatelessWidget {
             painter: BoardPainter(
               state: state,
               highlighted: highlighted,
+              upgradeHighlighted: upgradeHighlighted,
               selected: selected,
               hideBanditAt: hideBanditAt,
             ),

@@ -8,6 +8,10 @@ import 'board_geometry.dart';
 class BoardPainter extends CustomPainter {
   final GameState state;
   final Set<Hex> highlighted;
+
+  /// Owned hexes that can be upgraded: glow in their owner's color so the
+  /// signal reads differently from claimable (amber) hexes.
+  final Set<Hex> upgradeHighlighted;
   final Hex? selected;
 
   /// Suppresses the painted bandit on this hex while its fly-in animation
@@ -17,6 +21,7 @@ class BoardPainter extends CustomPainter {
   const BoardPainter({
     required this.state,
     this.highlighted = const {},
+    this.upgradeHighlighted = const {},
     this.selected,
     this.hideBanditAt,
   });
@@ -160,7 +165,27 @@ class BoardPainter extends CustomPainter {
       _text(canvas, '🦹', center - Offset(0, hexSize * 0.02), hexSize * 0.80);
     }
 
-    // Actionable tiles get an unmissable amber glow on top of everything.
+    // Upgradable tiles glow in their OWNER's color.
+    if (upgradeHighlighted.contains(tile.coord) && tile.ownerId != null) {
+      final ownerColor = playerColors[tile.ownerId!];
+      canvas.drawPath(
+        path,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = hexSize * 0.18
+          ..color = ownerColor
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+      );
+      canvas.drawPath(
+        path,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = hexSize * 0.05
+          ..color = Colors.white.withValues(alpha: 0.9),
+      );
+    }
+
+    // Claimable (and targetable) tiles get an unmissable amber glow.
     if (highlighted.contains(tile.coord)) {
       canvas.drawPath(
         path,
@@ -200,6 +225,7 @@ class BoardPainter extends CustomPainter {
   bool shouldRepaint(BoardPainter old) =>
       old.state != state ||
       old.highlighted != highlighted ||
+      old.upgradeHighlighted != upgradeHighlighted ||
       old.selected != selected ||
       old.hideBanditAt != hideBanditAt;
 }
