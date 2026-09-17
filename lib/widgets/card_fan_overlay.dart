@@ -172,11 +172,15 @@ class _CardFanOverlayState extends State<CardFanOverlay>
                     ),
                     child: const Text('Play'),
                   )
-                : const Center(
+                : Center(
                     child: Text(
-                      'not now',
-                      style:
-                          TextStyle(fontSize: 10, color: Color(0xFF9A8A6A)),
+                      spec.timing == CardTiming.diceChoice
+                          ? 'playable right after rolling'
+                          : 'playable after dice resolve',
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      style: const TextStyle(
+                          fontSize: 9.5, color: Color(0xFF9A8A6A)),
                     ),
                   ),
           ),

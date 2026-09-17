@@ -33,7 +33,7 @@ class _ProductionOverlayState extends State<ProductionOverlay>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: Duration(milliseconds: widget.grants.isEmpty ? 1800 : 1200),
+    duration: Duration(milliseconds: widget.grants.isEmpty ? 1800 : 1450),
   );
 
   static const _resourceEmoji = {
@@ -64,12 +64,13 @@ class _ProductionOverlayState extends State<ProductionOverlay>
       builder: (context, _) {
         final t = _controller.value;
         // Ease in fast, linger, fade near the end.
-        final opacity = t < 0.15
-            ? t / 0.15
-            : t > 0.75
-                ? (1 - t) / 0.25
+        final opacity = t < 0.12
+            ? t / 0.12
+            : t > 0.82
+                ? (1 - t) / 0.18
                 : 1.0;
-        final rise = Curves.easeOutCubic.transform(t) * 34;
+        // Gentle drift upward across the whole display.
+        final rise = Curves.easeOut.transform(t) * 30;
 
         if (widget.grants.isEmpty) {
           return Positioned.fill(
