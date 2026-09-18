@@ -59,6 +59,17 @@ class BoardPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final geometry = BoardGeometry(size);
+    // Shadow pass first so no tile's shadow falls on a neighbor's art.
+    for (final tile in state.tiles.values) {
+      final corners = geometry.cornersOf(tile.coord);
+      final path = Path()..addPolygon(corners, true);
+      canvas.drawPath(
+        path.shift(Offset(0, geometry.hexSize * 0.08)),
+        Paint()
+          ..color = const Color(0x59000000)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+      );
+    }
     for (final tile in state.tiles.values) {
       _paintTile(canvas, geometry, tile);
     }
@@ -73,13 +84,21 @@ class BoardPainter extends CustomPainter {
     final sprite = ArtStore.instance.tileImage(tile.terrain);
     if (sprite != null) {
       // Real art: fill the hex with the sprite, clipped to the hex shape.
+      // Sample a sub-window offset by a per-hex hash so same-terrain tiles
+      // show different slices of the one image instead of a stamped repeat.
       canvas.save();
       canvas.clipPath(path);
       final bounds = path.getBounds();
+      final spriteW = sprite.width.toDouble();
+      final spriteH = sprite.height.toDouble();
+      const window = 0.75;
+      final seed =
+          (tile.coord.q * 92837111) ^ (tile.coord.r * 689287499);
+      final dx = (seed.abs() & 0xFF) / 255 * spriteW * (1 - window);
+      final dy = ((seed.abs() >> 8) & 0xFF) / 255 * spriteH * (1 - window);
       canvas.drawImageRect(
         sprite,
-        Rect.fromLTWH(
-            0, 0, sprite.width.toDouble(), sprite.height.toDouble()),
+        Rect.fromLTWH(dx, dy, spriteW * window, spriteH * window),
         bounds,
         Paint()..filterQuality = FilterQuality.medium,
       );
@@ -100,13 +119,14 @@ class BoardPainter extends CustomPainter {
       );
     }
 
-    // Owner border.
+    // Rim: player color when owned, cream (matching the number tokens)
+    // when neutral - full-bleed art needs an edge to read as a piece.
     final border = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = tile.ownerId != null ? hexSize * 0.14 : 1.5
+      ..strokeWidth = tile.ownerId != null ? hexSize * 0.14 : hexSize * 0.07
       ..color = tile.ownerId != null
           ? playerColors[tile.ownerId!]
-          : const Color(0x33000000);
+          : const Color(0xFFF4EAD4);
     canvas.drawPath(path, border);
 
     if (selected == tile.coord) {

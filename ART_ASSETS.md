@@ -5,6 +5,11 @@ The game is fully playable with placeholders. **Any PNG you drop into
 build; anything missing keeps its placeholder.** Generate in any order -
 partial art always works.
 
+Easiest route: drop raws into `art_inbox/` named EXACTLY after their
+target (e.g. `tile_forest.png`, not `forest.png` - wrong names are
+skipped) and run `python3 scripts/process_art.py` - it strips backgrounds
+where needed, resizes, and places files for you.
+
 ## Style prompt prefix (use verbatim on EVERY asset for consistency)
 
 > Cozy medieval storybook game asset, flat vector illustration style, soft
@@ -12,20 +17,53 @@ partial art always works.
 > slate blue, cream), gentle top-left lighting, subtle texture, no text,
 > no watermark, centered subject, transparent background, PNG.
 
-Tips: generate one asset you love first (the forest tile), then feed it back
-as a style reference for every other batch. Generate at the listed size or
-larger and downscale. Tiles are drawn clipped to a hexagon, so fill the
-whole square frame edge to edge (corners get cropped by the hex mask).
+For full-bleed assets (tiles, `bg_menu`) drop "centered subject,
+transparent background" from the prefix - they must fill the frame.
+
+Tips: generate one asset you love first (the forest tile - done), then feed
+it back as a style reference (`--sref` / image prompt) for every other
+batch. Generate at the listed size or larger and downscale. Tiles are drawn
+clipped to a hexagon, so fill the whole square frame edge to edge (corners
+get cropped by the hex mask).
+
+## Lessons from the forest tile (apply to all remaining tiles)
+
+The first attempt failed by being a *texture* (dozens of small trees, no
+hierarchy); the keeper prompt asked for a *tile*. What made the difference:
+
+- **Name a small odd count** ("seven large trees") - a count stops
+  Midjourney from tiling the whole frame with repeated elements.
+- **Few, large, simple shapes on a plain ground** - append "large simple
+  shapes, minimal detail, uncluttered, mobile game map tile".
+- **One focal resource element** ("a single small pile of three cut logs")
+  placed lower-middle, not at the frame edge (the hex mask clips corners
+  and edges).
+- **`--style raw --stylize 50`** - default stylize is what pushed v1 into
+  ornate autumn-pattern territory.
+- **Value contrast beats detail** - canopies only read at board scale
+  because dark shadow greens sit against bright highlights. Reject
+  candidates where elements match the ground value.
+- **Watch palette drift** - v1 invented cream/white and rust-red trees;
+  off-palette colors are the most visible thing at small sizes.
+- **Squint test before accepting**: downscale to 64px and hex-mask (or
+  just squint at a thumbnail). Tiles render ~64-96px on the board; if it
+  turns to noise there, reroll.
+- Board rendering adds a cream rim + drop shadow around every tile, so the
+  art needs no border of its own.
 
 ## Priority 1 - the board (biggest visual win)
 
 | File | Size | Prompt subject |
 |---|---|---|
-| `tiles/tile_forest.png` | 512x512 | dense pine and oak forest seen from above at a slight angle, scattered cut logs |
-| `tiles/tile_field.png` | 512x512 | golden wheat field with haystacks, top-down slight angle |
-| `tiles/tile_hill.png` | 512x512 | rolling clay hills with a small brick kiln and stacked bricks |
-| `tiles/tile_mountain.png` | 512x512 | grey stone peaks with snow caps and boulders |
-| `tiles/tile_desert.png` | 512x512 | sandy dunes, single cactus, bleached bones |
+| `tiles/tile_forest.png` | 512x512 | DONE - seven large stylized pine and oak trees with big simple rounded canopies on a plain moss green ground, a single small pile of three cut logs at the front center, seen from above at a slight angle |
+| `tiles/tile_field.png` | 512x512 | five large simple golden wheat patches on a plain wheat-gold ground, a single small haystack at the front center, seen from above at a slight angle |
+| `tiles/tile_hill.png` | 512x512 | three large soft rolling terracotta clay mounds on a plain warm ground, a single small stack of red bricks at the front center, seen from above at a slight angle |
+| `tiles/tile_mountain.png` | 512x512 | three large simple grey stone peaks with snow caps on a plain slate ground, a single small pile of stone blocks at the front center, seen from above at a slight angle |
+| `tiles/tile_desert.png` | 512x512 | three large smooth sand dunes on a plain cream ground, a single green cactus at the front center, seen from above at a slight angle |
+
+Append to every tile subject: "large simple shapes, minimal detail,
+uncluttered, mobile game map tile --style raw --stylize 50" and use the
+forest tile as the style reference.
 | `bandit.png` | 256x256 | cheeky hooded bandit figure with a loot sack, mischievous not scary |
 
 Note: each tile must read as its resource at a glance (logs / wheat /
