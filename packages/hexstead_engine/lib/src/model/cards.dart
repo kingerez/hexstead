@@ -27,6 +27,9 @@ const cardCopies = 2;
 /// Cards dealt to each player at setup.
 const startingHandSize = 3;
 
+/// Rounds whose start deals every player one card.
+const refillRounds = {5, 10};
+
 const cardCatalog = <String, CardSpec>{
   'second_chance': CardSpec(
     id: 'second_chance',

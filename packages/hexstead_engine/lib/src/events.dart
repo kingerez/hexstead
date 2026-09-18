@@ -92,6 +92,15 @@ class ResourceStolen extends GameEvent {
   const ResourceStolen(this.fromPlayer, this.toPlayer, this.resource);
 }
 
+/// Bad-luck insurance payout: [Rules.droughtReliefThreshold] consecutive
+/// dry activations earn the player one random resource from the bank.
+class DroughtRelief extends GameEvent {
+  final int playerId;
+  final Resource resource;
+
+  const DroughtRelief(this.playerId, this.resource);
+}
+
 class LandmarkIncome extends GameEvent {
   final int playerId;
   final Resource resource;
@@ -117,6 +126,15 @@ class TurnEnded extends GameEvent {
   final int nextPlayerIndex;
 
   const TurnEnded(this.nextPlayerIndex);
+}
+
+/// A refill round began: [playerIds] each drew one card, in seat order.
+/// Players the deck ran out on are absent.
+class CardsDealt extends GameEvent {
+  final int round;
+  final List<int> playerIds;
+
+  const CardsDealt(this.round, this.playerIds);
 }
 
 class RoundAdvanced extends GameEvent {

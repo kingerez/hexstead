@@ -37,6 +37,10 @@ class PlayerState {
   /// The once-per-game card mulligan.
   final bool cardReplacedThisGame;
 
+  /// Consecutive dice activations that paid this player nothing; drought
+  /// relief triggers when it reaches [Rules.droughtReliefThreshold].
+  final int droughtStreak;
+
   const PlayerState({
     required this.id,
     required this.name,
@@ -48,6 +52,7 @@ class PlayerState {
     this.landmarkIds = const [],
     this.cardPlayedThisTurn = false,
     this.cardReplacedThisGame = false,
+    this.droughtStreak = 0,
   });
 
   int countOf(Resource r) => resources[r] ?? 0;
@@ -64,6 +69,7 @@ class PlayerState {
     List<String>? landmarkIds,
     bool? cardPlayedThisTurn,
     bool? cardReplacedThisGame,
+    int? droughtStreak,
   }) =>
       PlayerState(
         id: id,
@@ -77,6 +83,7 @@ class PlayerState {
         cardPlayedThisTurn: cardPlayedThisTurn ?? this.cardPlayedThisTurn,
         cardReplacedThisGame:
             cardReplacedThisGame ?? this.cardReplacedThisGame,
+        droughtStreak: droughtStreak ?? this.droughtStreak,
       );
 
   /// Returns resources with [delta] applied (negative to spend).

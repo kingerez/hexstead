@@ -75,7 +75,8 @@ ApplyResult _chooseActivation(GameState state, ActivationMode mode) {
 
   if (mode == ActivationMode.sum && d1 + d2 == 7) {
     events.add(const NothingProduced());
-    return ApplyResult(state.copyWith(phase: Phase.awaitingBandit), events);
+    final next = _applyDroughtTracking(state, const {}, events);
+    return ApplyResult(next.copyWith(phase: Phase.awaitingBandit), events);
   }
 
   final activated =
@@ -109,7 +110,40 @@ ApplyResult _chooseActivation(GameState state, ActivationMode mode) {
   events.add(grants.isEmpty
       ? const NothingProduced()
       : ResourcesProduced(grants));
+  next = _applyDroughtTracking(
+      next, {for (final g in grants) g.playerId}, events);
   return ApplyResult(next.copyWith(phase: Phase.main), events);
+}
+
+/// Bad-luck insurance: players paid by this activation reset their drought
+/// streak; everyone else increments, and a streak reaching
+/// [Rules.droughtReliefThreshold] pays 1 random resource and resets.
+GameState _applyDroughtTracking(
+    GameState state, Set<int> producers, List<GameEvent> events) {
+  var next = state;
+  for (final player in state.players) {
+    if (producers.contains(player.id)) {
+      next = next.withPlayer(player.id, (p) => p.copyWith(droughtStreak: 0));
+      continue;
+    }
+    final streak = player.droughtStreak + 1;
+    if (streak < Rules.droughtReliefThreshold) {
+      next =
+          next.withPlayer(player.id, (p) => p.copyWith(droughtStreak: streak));
+      continue;
+    }
+    final resource =
+        Resource.values[next.rng.nextInt(Resource.values.length)];
+    next = next.withPlayer(
+      player.id,
+      (p) => p.copyWith(
+        droughtStreak: 0,
+        resources: p.resourcesApplying({resource: 1}),
+      ),
+    );
+    events.add(DroughtRelief(player.id, resource));
+  }
+  return next;
 }
 
 /// Yield for one producing tile, including landmark modifiers.
@@ -586,8 +620,31 @@ ApplyResult _endTurn(GameState state) {
     lastDice: () => null,
   );
   events.add(TurnEnded(nextIndex));
-  if (wrapped) events.add(RoundAdvanced(next.round));
+  if (wrapped) {
+    events.add(RoundAdvanced(next.round));
+    next = _dealRefill(next, events);
+  }
   return ApplyResult(next, events);
+}
+
+/// Rounds 5 and 10 hand every player a card. The deck is finite, so players
+/// the deck cannot cover are skipped silently.
+GameState _dealRefill(GameState state, List<GameEvent> events) {
+  if (!refillRounds.contains(state.round)) return state;
+  var next = state;
+  final drew = <int>[];
+  for (final player in state.players) {
+    if (next.deck.isEmpty) break;
+    final drawIndex = next.rng.nextInt(next.deck.length);
+    final drawn = next.deck[drawIndex];
+    final deck = [...next.deck]..removeAt(drawIndex);
+    next = next.withPlayer(
+        player.id, (p) => p.copyWith(hand: [...p.hand, drawn]));
+    next = next.copyWith(deck: deck);
+    drew.add(player.id);
+  }
+  if (drew.isNotEmpty) events.add(CardsDealt(next.round, drew));
+  return next;
 }
 
 ApplyResult _checkInstantWin(GameState state, List<GameEvent> events) {
