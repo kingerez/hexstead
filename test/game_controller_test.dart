@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hexstead/state/game_controller.dart';
 import 'package:hexstead/state/persistence.dart';
@@ -108,5 +110,42 @@ void main() {
       expect(++guard, lessThan(2000));
     }
     expect(c.state!.winnerId, isNotNull);
+    // A finished game must not leave an autosave behind.
+    expect(store.saved, isNull);
+  });
+
+  test('hasResumableGame is true mid-game, false with no save or after over',
+      () async {
+    final store = InMemorySaveStore();
+    final c = _controller(store);
+    expect(await c.hasResumableGame(), isFalse);
+
+    await c.startNewGame(seed: 6, players: _setup);
+    expect(await c.hasResumableGame(), isTrue);
+
+    var guard = 0;
+    while (c.state!.phase != Phase.gameOver) {
+      await c.dispatch(StubBot.chooseAction(c.state!));
+      expect(++guard, lessThan(2000));
+    }
+    expect(await c.hasResumableGame(), isFalse);
+  });
+
+  test('resume clears a stale finished-game save and returns false',
+      () async {
+    final store = InMemorySaveStore();
+    final c = _controller(store);
+    await c.startNewGame(seed: 7, players: _setup);
+    var guard = 0;
+    while (c.state!.phase != Phase.gameOver) {
+      await c.dispatch(StubBot.chooseAction(c.state!));
+      expect(++guard, lessThan(2000));
+    }
+    // Simulate an old build that autosaved the finished state.
+    store.saved = jsonEncode(gameStateToJson(c.state!));
+
+    final c2 = _controller(store);
+    expect(await c2.resume(), isFalse);
+    expect(store.saved, isNull);
   });
 }

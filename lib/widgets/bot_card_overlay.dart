@@ -29,7 +29,7 @@ class _BotCardOverlayState extends State<BotCardOverlay>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1900),
+    duration: const Duration(milliseconds: 2400),
   );
 
   @override
@@ -55,13 +55,13 @@ class _BotCardOverlayState extends State<BotCardOverlay>
         // Pop in with a little overshoot, hold, then shrink away.
         final double scale;
         final double opacity;
-        if (t < 0.18) {
+        if (t < 0.14) {
           final enter =
-              Curves.easeOutBack.transform((t / 0.18).clamp(0.0, 1.0));
+              Curves.easeOutBack.transform((t / 0.14).clamp(0.0, 1.0));
           scale = 0.4 + 0.6 * enter;
-          opacity = (t / 0.10).clamp(0.0, 1.0);
-        } else if (t > 0.85) {
-          final exit = ((t - 0.85) / 0.15).clamp(0.0, 1.0);
+          opacity = (t / 0.08).clamp(0.0, 1.0);
+        } else if (t > 0.88) {
+          final exit = ((t - 0.88) / 0.12).clamp(0.0, 1.0);
           scale = 1.0 - 0.2 * Curves.easeIn.transform(exit);
           opacity = 1.0 - exit;
         } else {
@@ -104,7 +104,7 @@ class _BotCardOverlayState extends State<BotCardOverlay>
                       ),
                       const SizedBox(height: 14),
                       Transform.scale(
-                        scale: 1.25,
+                        scale: 1.25 * cardScaleOf(context),
                         child: ActionCardFace(cardId: widget.cardId),
                       ),
                     ],

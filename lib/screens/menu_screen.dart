@@ -57,14 +57,14 @@ class MenuScreen extends StatelessWidget {
                 child: const Text('New Game', style: TextStyle(fontSize: 18)),
               ),
               const SizedBox(height: 12),
-              FutureBuilder<String?>(
-                future: controller.saveStore.load(),
-                builder: (context, snapshot) => snapshot.data == null
-                    ? const SizedBox.shrink()
-                    : TextButton(
+              FutureBuilder<bool>(
+                future: controller.hasResumableGame(),
+                builder: (context, snapshot) => snapshot.data == true
+                    ? TextButton(
                         onPressed: () => _continue(context),
                         child: const Text('Continue'),
-                      ),
+                      )
+                    : const SizedBox.shrink(),
               ),
             ],
           ),

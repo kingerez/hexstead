@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
 
+/// Tablets (>= 600dp shortest side) get larger cards; 1.4 keeps a 5-card
+/// fan inside an iPad portrait width.
+double cardScaleOf(BuildContext context) =>
+    MediaQuery.sizeOf(context).shortestSide >= 600 ? 1.4 : 1.0;
+
 /// The hand as a centered fan of cards. Enters by scaling up from the HUD
 /// fan icon, leaves by shrinking back to it. Tap outside to dismiss; each
 /// playable card carries its own Play button.
@@ -74,6 +79,7 @@ class _CardFanOverlayState extends State<CardFanOverlay>
       builder: (context, _) {
         final flyT = Curves.easeInOutCubic.transform(_fly.value);
         final settled = _fly.value == 0;
+        final cardScale = cardScaleOf(context);
 
         return Positioned.fill(
           child: GestureDetector(
@@ -85,7 +91,7 @@ class _CardFanOverlayState extends State<CardFanOverlay>
               child: Transform.translate(
                 offset: widget.flyOffset * flyT,
                 child: Transform.scale(
-                  scale: 1.0 - 0.78 * flyT,
+                  scale: cardScale - (cardScale - 0.22) * flyT,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [

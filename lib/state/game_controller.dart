@@ -56,11 +56,18 @@ class GameController extends ChangeNotifier {
   Future<bool> resume() async {
     final json = await saveStore.load();
     if (json == null) return false;
+    final GameState decoded;
     try {
-      _state = gameStateFromJson(jsonDecode(json) as Map<String, dynamic>);
+      decoded = gameStateFromJson(jsonDecode(json) as Map<String, dynamic>);
     } on FormatException {
       return false;
     }
+    if (decoded.phase == Phase.gameOver) {
+      // Defensive: devices in the field may hold stale finished-game saves.
+      await saveStore.clear();
+      return false;
+    }
+    _state = decoded;
     lastEvents = const [];
     notifyListeners();
     await _driveBots();
@@ -102,7 +109,27 @@ class GameController extends ChangeNotifier {
     }
   }
 
+  /// Whether the menu should offer Continue: a save exists, decodes, and is
+  /// not a finished game. Never mutates [_state].
+  Future<bool> hasResumableGame() async {
+    final json = await saveStore.load();
+    if (json == null) return false;
+    try {
+      final decoded =
+          gameStateFromJson(jsonDecode(json) as Map<String, dynamic>);
+      return decoded.phase != Phase.gameOver;
+    } on FormatException {
+      return false;
+    }
+  }
+
   Future<void> _persist() async {
+    if (_state!.phase == Phase.gameOver) {
+      // A finished game must not leave an autosave behind, or the menu
+      // would keep offering a dead Continue.
+      await saveStore.clear();
+      return;
+    }
     await saveStore.save(jsonEncode(gameStateToJson(_state!)));
   }
 }
