@@ -75,7 +75,9 @@ resource icon.
 | File | Size | Prompt subject |
 |---|---|---|
 | `ui/bg_menu.png` | 1536x2048 | distant cozy medieval valley with hex-patterned farmland at dawn (no transparency) |
-| App icon (replaces `ios/Runner/Assets.xcassets/AppIcon.appiconset/`) | 1024x1024 | single forest hex tile with an ivory die leaning on it (no transparency, fills canvas) |
+| App icon (replaces `ios/Runner/Assets.xcassets/AppIcon.appiconset/`) | 1024x1024 | DONE - single forest hex tile with an ivory die leaning on it (no transparency, fills canvas) |
+
+App icon: drop the raw as `art_inbox/app_icon.png` and run `python3 scripts/make_app_icon.py` - it composites a clean vector die over the AI die and regenerates the iOS iconset + web icons.
 
 ## Priority 3 - the shop (art shows as card watermark, auto-wired)
 
