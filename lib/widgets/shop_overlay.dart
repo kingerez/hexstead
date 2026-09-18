@@ -84,13 +84,19 @@ class ShopOverlay extends StatelessWidget {
                           style: TextStyle(color: Colors.white70)),
                     )
                   else
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      alignment: WrapAlignment.center,
-                      children: [
-                        for (final id in state.landmarkOffer) _card(id),
-                      ],
+                    // Flexible + scroll view: on narrow screens the Wrap
+                    // stacks one card per row and would run off the bottom.
+                    Flexible(
+                      child: SingleChildScrollView(
+                        child: Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          alignment: WrapAlignment.center,
+                          children: [
+                            for (final id in state.landmarkOffer) _card(id),
+                          ],
+                        ),
+                      ),
                     ),
                 ],
               ),

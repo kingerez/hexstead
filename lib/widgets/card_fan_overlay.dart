@@ -106,22 +106,33 @@ class _CardFanOverlayState extends State<CardFanOverlay>
                           style: TextStyle(color: Colors.white70),
                         )
                       else
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            for (final (i, id) in widget.cardIds.indexed)
-                              Transform.translate(
-                                offset: Offset(0,
-                                    i == widget.cardIds.length ~/ 2 ? -8 : 4),
-                                child: Transform.rotate(
-                                  angle:
-                                      (i - (widget.cardIds.length - 1) / 2) *
+                        // Scale the whole fan down when a wide hand outgrows
+                        // a narrow screen; natural size when it fits.
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                for (final (i, id) in widget.cardIds.indexed)
+                                  Transform.translate(
+                                    offset: Offset(
+                                        0,
+                                        i == widget.cardIds.length ~/ 2
+                                            ? -8
+                                            : 4),
+                                    child: Transform.rotate(
+                                      angle: (i -
+                                              (widget.cardIds.length - 1) / 2) *
                                           0.14,
-                                  child: _card(id, settled),
-                                ),
-                              ),
-                          ],
+                                      child: _card(id, settled),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
                         ),
                     ],
                   ),
