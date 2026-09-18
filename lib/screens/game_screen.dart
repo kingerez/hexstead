@@ -804,9 +804,13 @@ class _TipBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Tablet cap: matches the top bar so the chrome reads as one column.
     return SizedBox(
       height: 36,
-      child: Padding(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12),
         child: Row(
           children: [
@@ -852,6 +856,8 @@ class _TipBar extends StatelessWidget {
             ],
           ],
         ),
+          ),
+        ),
       ),
     );
   }
@@ -866,7 +872,12 @@ class _TopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final current = state.currentPlayer;
     final currentColor = BoardPainter.playerColors[current.id];
-    return Padding(
+    // Tablet cap: chrome content stays readable instead of smearing across
+    // the full width. Inert on phones (below 640px).
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 640),
+        child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -917,6 +928,8 @@ class _TopBar extends StatelessWidget {
             ),
           ),
         ],
+      ),
+        ),
       ),
     );
   }
@@ -970,13 +983,19 @@ class _Hud extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = controller.state!;
     final human = state.players.firstWhere((p) => !p.isBot);
+    // The bar itself spans the full screen; only its content is capped so
+    // tablet controls sit centered instead of smearing edge to edge.
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       decoration: const BoxDecoration(
         color: Color(0xFF243329),
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      child: Column(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // Every row has a FIXED height so the HUD (and the board above it)
@@ -1052,6 +1071,8 @@ class _Hud extends StatelessWidget {
             child: Center(child: _actionRow(context, state)),
           ),
         ],
+      ),
+        ),
       ),
     );
   }

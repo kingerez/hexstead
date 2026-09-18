@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'art/art_store.dart';
 import 'screens/menu_screen.dart';
@@ -9,6 +11,8 @@ import 'state/persistence.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // The whole UI is designed portrait-first; landscape is never a good fit.
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   await ArtStore.instance.load();
   runApp(
     HexsteadApp(controller: GameController(saveStore: createSaveStore())),
@@ -41,10 +45,12 @@ class HexsteadApp extends StatelessWidget {
   }
 }
 
-/// On windows wider than a phone, letterboxes the app into a centered
-/// portrait frame with real phone proportions (iPhone-ish 9:19.5), rounded
-/// corners, and a bezel. MediaQuery is overridden to the frame size so all
-/// in-app layout math sees phone dimensions.
+/// Desktop-web affordance: on windows wider than a phone, letterboxes the
+/// app into a centered portrait frame with real phone proportions
+/// (iPhone-ish 9:19.5), rounded corners, and a bezel. MediaQuery is
+/// overridden to the frame size so all in-app layout math sees phone
+/// dimensions. Mobile devices - phones AND tablets - always render full
+/// screen; the frame never applies there.
 class _PhoneFrame extends StatelessWidget {
   final Widget child;
 
@@ -52,6 +58,12 @@ class _PhoneFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Tablets are wider than 520px but are real touch devices, not a
+    // desktop browser window - they get the full screen.
+    if (defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.android) {
+      return child;
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth <= 520) return child;
