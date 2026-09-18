@@ -8,13 +8,17 @@ import '../board/board_painter.dart';
 
 /// After an activation, floats "+N icon" chips up from every producing hex
 /// in the producer's color - or a "no hexes matched" notice when the roll
-/// paid nobody. Awaited by the game loop so the payout is always seen.
+/// paid nobody. Drought-relief payouts float as centered chips since they
+/// come from the bank, not a hex. Awaited by the game loop so the payout is
+/// always seen.
 class ProductionOverlay extends StatefulWidget {
   final BoardGeometry geometry;
   final List<ProductionGrant> grants;
 
-  /// Explanation shown when nothing produced.
+  /// Explanation shown when nothing produced; empty string suppresses it.
   final String emptyMessage;
+  final List<DroughtRelief> reliefs;
+  final List<String> playerNames;
   final VoidCallback onDone;
 
   const ProductionOverlay({
@@ -22,6 +26,8 @@ class ProductionOverlay extends StatefulWidget {
     required this.geometry,
     required this.grants,
     required this.emptyMessage,
+    this.reliefs = const [],
+    this.playerNames = const [],
     required this.onDone,
   });
 
@@ -72,42 +78,74 @@ class _ProductionOverlayState extends State<ProductionOverlay>
         // Gentle drift upward across the whole display.
         final rise = Curves.easeOut.transform(t) * 30;
 
-        if (widget.grants.isEmpty) {
-          return Positioned.fill(
-            child: IgnorePointer(
-              child: Center(
-                child: Opacity(
-                  opacity: opacity,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.55),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Text(
-                      widget.emptyMessage,
-                      style: const TextStyle(
-                          color: Colors.white70, fontSize: 15),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        }
-
         return Positioned.fill(
           child: IgnorePointer(
             child: Stack(
               children: [
                 for (final (i, grant) in widget.grants.indexed)
                   _chip(grant, i, opacity, rise),
+                if ((widget.grants.isEmpty &&
+                        widget.emptyMessage.isNotEmpty) ||
+                    widget.reliefs.isNotEmpty)
+                  Center(
+                    child: Opacity(
+                      opacity: opacity,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (widget.grants.isEmpty &&
+                              widget.emptyMessage.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.55),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Text(
+                                widget.emptyMessage,
+                                style: const TextStyle(
+                                    color: Colors.white70, fontSize: 15),
+                              ),
+                            ),
+                          for (final relief in widget.reliefs)
+                            _reliefChip(relief),
+                        ],
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
         );
       },
+    );
+  }
+
+  /// Bank payout for a starving player: no source hex, so it floats center.
+  Widget _reliefChip(DroughtRelief relief) {
+    final name = relief.playerId < widget.playerNames.length
+        ? widget.playerNames[relief.playerId]
+        : '?';
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        color: BoardPainter.playerColors[relief.playerId],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white, width: 1.5),
+        boxShadow: const [
+          BoxShadow(color: Colors.black45, blurRadius: 6),
+        ],
+      ),
+      child: Text(
+        '🍀 $name +1 ${_resourceEmoji[relief.resource]}',
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 15,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
 

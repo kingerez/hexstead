@@ -9,6 +9,7 @@ import '../board/board_painter.dart';
 import '../board/board_widget.dart';
 import '../widgets/adjust_die_dialog.dart';
 import '../widgets/bandit_fly_overlay.dart';
+import '../widgets/bot_card_overlay.dart';
 import '../widgets/card_fan_overlay.dart';
 import '../widgets/dice_roll_overlay.dart';
 import '../widgets/settings_overlay.dart';
@@ -33,7 +34,7 @@ class _GameScreenState extends State<GameScreen> {
   Hex? _selected;
   bool _navigatedToGameOver = false;
 
-  /// A card awaiting a tile tap (drought/charter/banish/brigand).
+  /// A card awaiting a tile tap (drought/charter/brigand).
   String? _pendingCardId;
 
   /// Dice currently tumbling on screen; the game waits until they settle.
@@ -47,8 +48,12 @@ class _GameScreenState extends State<GameScreen> {
   Completer<void>? _banditCompleter;
 
   /// Production payout being floated over the board right now.
-  (List<ProductionGrant>, String)? _production;
+  (List<ProductionGrant>, String, List<DroughtRelief>)? _production;
   Completer<void>? _productionCompleter;
+
+  /// Bot card play being revealed; the game waits until it fades.
+  CardPlayed? _botCardPlay;
+  Completer<void>? _botCardCompleter;
 
   /// Board canvas size from the last layout, for overlay positioning.
   Size _boardSize = Size.zero;
@@ -130,7 +135,9 @@ class _GameScreenState extends State<GameScreen> {
         .where((a) => a.cardId == cardId)
         .toList();
     if (options.isEmpty) return;
-    if (const {'drought', 'charter', 'banish', 'brigand'}.contains(cardId)) {
+    // Banish is excluded: there is only one bandit, so its single legal
+    // target needs no tap - it dispatches directly below.
+    if (const {'drought', 'charter', 'brigand'}.contains(cardId)) {
       setState(() => _pendingCardId = cardId);
       return;
     }
@@ -193,6 +200,19 @@ class _GameScreenState extends State<GameScreen> {
   /// animations (dice roll, bandit fly-in) for human and bot actions alike.
   Future<void> _presentEvents(List<GameEvent> events) async {
     if (!mounted) return;
+    // A bot's card play is revealed before its consequences (re-rolls,
+    // bandits, steals) animate. Human plays were seen in the hand fan.
+    final cardPlays = events.whereType<CardPlayed>();
+    if (cardPlays.isNotEmpty &&
+        state.players[cardPlays.first.playerId].isBot) {
+      final completer = Completer<void>();
+      setState(() {
+        _botCardPlay = cardPlays.first;
+        _botCardCompleter = completer;
+      });
+      await completer.future;
+    }
+    if (!mounted) return;
     final rolls = events.whereType<DiceRolled>();
     if (rolls.isNotEmpty) {
       final roll = rolls.first;
@@ -213,22 +233,47 @@ class _GameScreenState extends State<GameScreen> {
     }
     if (!mounted) return;
     // Payout moment: float the gains (or the whiff) after an activation.
+    // Drought relief can also fire on a 7, which has no ActivationChosen.
+    // The harvest card produces outside any roll, so it triggers the same
+    // ceremony off its CardPlayed event.
     final chosen = events.whereType<ActivationChosen>();
-    if (chosen.isNotEmpty) {
+    final reliefs = events.whereType<DroughtRelief>().toList();
+    final harvestPlayed = cardPlays.any((c) => c.cardId == 'harvest');
+    if (chosen.isNotEmpty || reliefs.isNotEmpty || harvestPlayed) {
       final grants = [
         for (final e in events.whereType<ResourcesProduced>()) ...e.grants,
       ];
-      final numbers = chosen.first.activatedNumbers;
-      // Distinguish "the number isn't on the board" from "nobody owns it".
-      final numbersOnBoard = state.tiles.values
-          .any((t) => t.number != null && numbers.contains(t.number));
-      final label = numbers.toSet().join(' or ');
-      final emptyMessage = numbersOnBoard
-          ? 'No one owns a hex numbered $label yet'
-          : 'No hex is numbered $label';
+      var emptyMessage = '';
+      if (harvestPlayed && chosen.isEmpty) {
+        emptyMessage = 'The harvest came up empty';
+      } else if (chosen.isNotEmpty) {
+        final numbers = chosen.first.activatedNumbers;
+        // Distinguish "the number isn't on the board" from "nobody owns it".
+        final numbersOnBoard = state.tiles.values
+            .any((t) => t.number != null && numbers.contains(t.number));
+        final label = numbers.toSet().join(' or ');
+        emptyMessage = numbersOnBoard
+            ? 'No one owns a hex numbered $label yet'
+            : 'No hex is numbered $label';
+      }
       final completer = Completer<void>();
       setState(() {
-        _production = (grants, emptyMessage);
+        _production = (grants, emptyMessage, reliefs);
+        _productionCompleter = completer;
+      });
+      await completer.future;
+    }
+    if (!mounted) return;
+    // Refill rounds top up every hand: say so before play resumes.
+    final dealt = events.whereType<CardsDealt>();
+    if (dealt.isNotEmpty) {
+      final completer = Completer<void>();
+      setState(() {
+        _production = (
+          const [],
+          'Round ${dealt.first.round} - everyone draws a card',
+          const []
+        );
         _productionCompleter = completer;
       });
       await completer.future;
@@ -261,6 +306,16 @@ class _GameScreenState extends State<GameScreen> {
       setState(() {
         _production = null;
         _productionCompleter = null;
+      });
+    }
+  }
+
+  void _onBotCardShown() {
+    _botCardCompleter?.complete();
+    if (mounted) {
+      setState(() {
+        _botCardPlay = null;
+        _botCardCompleter = null;
       });
     }
   }
@@ -343,9 +398,13 @@ class _GameScreenState extends State<GameScreen> {
     if (!controller.isHumanTurn) return;
     final actions = legalActions(state);
     if (_pendingCardId != null) {
-      final action = actions.whereType<PlayCard>().where(
-          (a) => a.cardId == _pendingCardId && a.targetHex == hex);
+      // Capture before clearing: the where() filter is lazy and would
+      // otherwise see the nulled field and match nothing.
+      final pending = _pendingCardId;
       setState(() => _pendingCardId = null);
+      final action = actions
+          .whereType<PlayCard>()
+          .where((a) => a.cardId == pending && a.targetHex == hex);
       if (action.isNotEmpty) _tryDispatch(action.first);
       return;
     }
@@ -524,7 +583,22 @@ class _GameScreenState extends State<GameScreen> {
                           geometry: geometry,
                           grants: _production!.$1,
                           emptyMessage: _production!.$2,
+                          reliefs: _production!.$3,
+                          playerNames: [
+                            for (final p in state.players)
+                              p.isBot ? p.name : 'You',
+                          ],
                           onDone: _onProductionShown,
+                        ),
+                      if (_botCardPlay != null)
+                        BotCardOverlay(
+                          key: ValueKey(_botCardPlay),
+                          cardId: _botCardPlay!.cardId,
+                          playerName:
+                              state.players[_botCardPlay!.playerId].name,
+                          playerColor: BoardPainter
+                              .playerColors[_botCardPlay!.playerId],
+                          onDone: _onBotCardShown,
                         ),
                       if (_banditFlyTarget != null)
                         BanditFlyOverlay(
@@ -923,6 +997,21 @@ class _Hud extends StatelessWidget {
                         '${resourceEmoji[r]} ${human.countOf(r)}',
                         style:
                             const TextStyle(color: Colors.white, fontSize: 16),
+                      ),
+                    ),
+                  // Dry-streak meter: relief pays out when it fills.
+                  if (human.droughtStreak > 0)
+                    Tooltip(
+                      message: 'Dry rolls - a free resource at '
+                          '${Rules.droughtReliefThreshold}',
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 14),
+                        child: Text(
+                          '🍀 ${human.droughtStreak}/'
+                          '${Rules.droughtReliefThreshold}',
+                          style: const TextStyle(
+                              color: Colors.white54, fontSize: 14),
+                        ),
                       ),
                     ),
                   const SizedBox(width: 8),

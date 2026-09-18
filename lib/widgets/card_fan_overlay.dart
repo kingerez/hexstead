@@ -144,6 +144,68 @@ class _CardFanOverlayState extends State<CardFanOverlay>
     final spec = cardCatalog[id]!;
     final playable = widget.playableCardIds.contains(id);
     final replaceable = widget.replaceableCardIds.contains(id);
+    return ActionCardFace(
+      cardId: id,
+      trailing: replaceable
+          ? InkWell(
+              onTap: settled ? () => widget.onReplace?.call(id) : null,
+              child: const Padding(
+                padding: EdgeInsets.only(left: 2),
+                child: Icon(Icons.swap_horiz,
+                    size: 18, color: Color(0xFF9A6B1F)),
+              ),
+            )
+          : null,
+      footer: SizedBox(
+        width: double.infinity,
+        height: 30,
+        child: playable
+            ? FilledButton(
+                onPressed: settled ? () => _close(play: id) : null,
+                style: FilledButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  textStyle: const TextStyle(fontSize: 12),
+                ),
+                child: const Text('Play'),
+              )
+            : Center(
+                child: Text(
+                  spec.timing == CardTiming.diceChoice
+                      ? 'playable right after rolling'
+                      : 'playable after dice resolve',
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  style: const TextStyle(
+                      fontSize: 9.5, color: Color(0xFF9A8A6A)),
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+/// One action card's parchment face: name, description, and optional
+/// interactive slots. Shared by the hand fan and the bot-play reveal so a
+/// card always looks the same wherever it appears.
+class ActionCardFace extends StatelessWidget {
+  final String cardId;
+
+  /// Top-right corner slot (the fan's swap icon).
+  final Widget? trailing;
+
+  /// Bottom slot (the fan's Play button or timing hint).
+  final Widget? footer;
+
+  const ActionCardFace({
+    super.key,
+    required this.cardId,
+    this.trailing,
+    this.footer,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final spec = cardCatalog[cardId]!;
     return Container(
       width: 108,
       height: 176,
@@ -176,17 +238,7 @@ class _CardFanOverlayState extends State<CardFanOverlay>
                   ),
                 ),
               ),
-              if (replaceable)
-                InkWell(
-                  onTap: settled
-                      ? () => widget.onReplace?.call(id)
-                      : null,
-                  child: const Padding(
-                    padding: EdgeInsets.only(left: 2),
-                    child: Icon(Icons.swap_horiz,
-                        size: 18, color: Color(0xFF9A6B1F)),
-                  ),
-                ),
+              ?trailing,
             ],
           ),
           const SizedBox(height: 6),
@@ -197,30 +249,7 @@ class _CardFanOverlayState extends State<CardFanOverlay>
               style: const TextStyle(fontSize: 11, color: Color(0xFF5A4A34)),
             ),
           ),
-          SizedBox(
-            width: double.infinity,
-            height: 30,
-            child: playable
-                ? FilledButton(
-                    onPressed: settled ? () => _close(play: id) : null,
-                    style: FilledButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      textStyle: const TextStyle(fontSize: 12),
-                    ),
-                    child: const Text('Play'),
-                  )
-                : Center(
-                    child: Text(
-                      spec.timing == CardTiming.diceChoice
-                          ? 'playable right after rolling'
-                          : 'playable after dice resolve',
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      style: const TextStyle(
-                          fontSize: 9.5, color: Color(0xFF9A8A6A)),
-                    ),
-                  ),
-          ),
+          ?footer,
         ],
       ),
     );
