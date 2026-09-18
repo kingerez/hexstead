@@ -93,18 +93,6 @@ class _CardFanOverlayState extends State<CardFanOverlay>
                         opacity: (1 - flyT).clamp(0.0, 1.0),
                         child: const _OutlinedTitle('Your cards'),
                       ),
-                      if (widget.replaceableCardIds.isNotEmpty)
-                        Opacity(
-                          opacity: (1 - flyT).clamp(0.0, 1.0),
-                          child: const Padding(
-                            padding: EdgeInsets.only(top: 4),
-                            child: Text(
-                              'Tap a card\'s ⇄ to swap it - once per game',
-                              style: TextStyle(
-                                  color: Colors.white70, fontSize: 12),
-                            ),
-                          ),
-                        ),
                       const SizedBox(height: 18),
                       if (widget.cardIds.isEmpty)
                         const Text(
@@ -220,36 +208,41 @@ class ActionCardFace extends StatelessWidget {
               color: Colors.black45, blurRadius: 10, offset: Offset(0, 4)),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      // The swap icon floats over the top-right corner instead of sharing
+      // the title row - single-word names like Cutpurse need the full
+      // card width to avoid a mid-word break.
+      child: Stack(
+        // Expand: the Column carries an Expanded, so it needs the card's
+        // fixed height rather than the Stack's loose constraints.
+        fit: StackFit.expand,
         children: [
-          Row(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text(
-                  spec.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF3A2E20),
-                  ),
+              Text(
+                spec.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF3A2E20),
                 ),
               ),
-              ?trailing,
+              const SizedBox(height: 6),
+              Expanded(
+                child: Text(
+                  spec.description,
+                  overflow: TextOverflow.fade,
+                  style:
+                      const TextStyle(fontSize: 11, color: Color(0xFF5A4A34)),
+                ),
+              ),
+              ?footer,
             ],
           ),
-          const SizedBox(height: 6),
-          Expanded(
-            child: Text(
-              spec.description,
-              overflow: TextOverflow.fade,
-              style: const TextStyle(fontSize: 11, color: Color(0xFF5A4A34)),
-            ),
-          ),
-          ?footer,
+          if (trailing != null)
+            Positioned(top: 0, right: 0, child: trailing!),
         ],
       ),
     );
