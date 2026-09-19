@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
 
+import '../art/art_store.dart';
+
 /// Tablets (>= 600dp shortest side) get larger cards; 1.4 keeps a 5-card
 /// fan inside an iPad portrait width.
 double cardScaleOf(BuildContext context) =>
@@ -233,6 +235,7 @@ class ActionCardFace extends StatelessWidget {
       height: 176,
       margin: const EdgeInsets.symmetric(horizontal: 3),
       padding: const EdgeInsets.all(10),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: const Color(0xFFF4EAD4),
         borderRadius: BorderRadius.circular(12),
@@ -250,6 +253,22 @@ class ActionCardFace extends StatelessWidget {
         // fixed height rather than the Stack's loose constraints.
         fit: StackFit.expand,
         children: [
+          // Faded art bleeding off the bottom-right corner; plain parchment
+          // when the card has no art bundled.
+          Positioned(
+            right: -14,
+            bottom: -8,
+            child: Opacity(
+              opacity: 0.18,
+              child: ArtStore.instance.image(
+                'assets/images/cards/art_$cardId.png',
+                width: 92,
+                height: 92,
+                fit: BoxFit.contain,
+                placeholder: const SizedBox.shrink(),
+              ),
+            ),
+          ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
