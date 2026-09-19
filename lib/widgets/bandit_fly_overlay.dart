@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../art/art_store.dart';
+
 /// The bandit's entrance, in three beats:
 ///  1. blackout - a grungy dark layer drops over the board and the bandit
 ///     looms huge at center screen for 500ms
@@ -91,7 +93,15 @@ class _BanditFlyOverlayState extends State<BanditFlyOverlay>
                 Positioned(
                   left: pos.dx - size / 2,
                   top: pos.dy - size / 2,
-                  child: Text('🦹', style: TextStyle(fontSize: size)),
+                  // Same sprite the painter lands on, so the handoff at the
+                  // end of the flight is invisible.
+                  child: ArtStore.instance.image(
+                    ArtStore.banditPath,
+                    width: size,
+                    height: size,
+                    fit: BoxFit.contain,
+                    placeholder: Text('🦹', style: TextStyle(fontSize: size)),
+                  ),
                 ),
               ],
             ),

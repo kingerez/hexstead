@@ -37,9 +37,16 @@ class ProductionOverlay extends StatefulWidget {
 
 class _ProductionOverlayState extends State<ProductionOverlay>
     with SingleTickerProviderStateMixin {
+  // Fades are fixed in ms and the hold soaks up the rest, so the two totals
+  // below differ only in how long the payout stays readable.
+  static const _enterMs = 175;
+  static const _exitMs = 260;
+
+  int get _totalMs => widget.grants.isEmpty ? 2300 : 1950;
+
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: Duration(milliseconds: widget.grants.isEmpty ? 1800 : 1450),
+    duration: Duration(milliseconds: _totalMs),
   );
 
   static const _resourceEmoji = {
@@ -69,11 +76,12 @@ class _ProductionOverlayState extends State<ProductionOverlay>
       animation: _controller,
       builder: (context, _) {
         final t = _controller.value;
+        final ms = t * _totalMs;
         // Ease in fast, linger, fade near the end.
-        final opacity = t < 0.12
-            ? t / 0.12
-            : t > 0.82
-                ? (1 - t) / 0.18
+        final opacity = ms < _enterMs
+            ? ms / _enterMs
+            : ms > _totalMs - _exitMs
+                ? (_totalMs - ms) / _exitMs
                 : 1.0;
         // Gentle drift upward across the whole display.
         final rise = Curves.easeOut.transform(t) * 30;

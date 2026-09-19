@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../art/art_store.dart';
 import '../board/board_geometry.dart';
 import '../board/board_painter.dart';
 import '../board/board_widget.dart';
@@ -792,8 +793,14 @@ class _GameScreenState extends State<GameScreen> {
                               key: ValueKey(_banditFlyTarget),
                               start: Offset(_boardSize.width / 2,
                                   _boardSize.height / 2),
-                              target: geometry.centerOf(_banditFlyTarget!),
-                              endSize: geometry.hexSize * 0.80,
+                              // Landing size and offset mirror BoardPainter's
+                              // bandit metrics - change one, change both.
+                              target: geometry.centerOf(_banditFlyTarget!) -
+                                  Offset(0, geometry.hexSize * 0.02),
+                              endSize: geometry.hexSize *
+                                  (ArtStore.instance.banditImage != null
+                                      ? 1.1
+                                      : 0.80),
                               onDone: _onBanditLanded,
                             ),
                           ],
