@@ -192,7 +192,12 @@ class ShopOverlay extends StatelessWidget {
                     border:
                         Border.all(color: const Color(0xFF8A6F4D), width: 1),
                   ),
-                  child: Row(
+                  // Label above, resources below: a three-resource cost has
+                  // the full card width to itself instead of wrapping
+                  // mid-list beside a vertically centred "Cost:".
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
                         'Cost:',
@@ -203,18 +208,16 @@ class ShopOverlay extends StatelessWidget {
                           color: Color(0xFF7A6647),
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          spec.cost.entries
-                              .map((e) =>
-                                  '${e.value} ${_resourceEmoji[e.key]}')
-                              .join('   '),
-                          style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF3A2E20)),
-                        ),
+                      const SizedBox(height: 2),
+                      Text(
+                        spec.cost.entries
+                            .map((e) => '${e.value} ${_resourceEmoji[e.key]}')
+                            .join('   '),
+                        maxLines: 1,
+                        style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF3A2E20)),
                       ),
                     ],
                   ),
