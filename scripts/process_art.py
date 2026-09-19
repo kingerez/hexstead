@@ -39,7 +39,7 @@ TARGETS = {
                  "market_hall", "watchtower", "keep"]},
     **{r: (f"resources/{r}.png", 128, True)
        for r in ["wood", "grain", "brick", "stone"]},
-    **{f"art_{c}": (f"cards/art_{c}.png", 384, False)
+    **{f"art_{c}": (f"cards/art_{c}.png", 384, True)
        for c in ["second_chance", "omen", "drought", "charter", "cutpurse",
                  "bounty", "banish", "brigand", "harvest", "tithe"]},
 }
