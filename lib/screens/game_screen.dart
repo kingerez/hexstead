@@ -11,12 +11,14 @@ import '../widgets/adjust_die_dialog.dart';
 import '../widgets/bandit_fly_overlay.dart';
 import '../widgets/bot_card_overlay.dart';
 import '../widgets/card_fan_overlay.dart';
+import '../widgets/chrome.dart';
 import '../widgets/dice_roll_overlay.dart';
 import '../widgets/settings_overlay.dart';
 import '../widgets/shop_overlay.dart';
 import '../widgets/trade_overlay.dart';
 import '../widgets/production_overlay.dart';
-import '../widgets/tile_info_sheet.dart';
+import '../widgets/tile_inspector.dart';
+import '../widgets/turn_splash_overlay.dart';
 import '../widgets/welcome_card.dart';
 import '../state/game_controller.dart';
 import 'game_over_screen.dart';
@@ -29,6 +31,10 @@ class GameScreen extends StatefulWidget {
   @override
   State<GameScreen> createState() => _GameScreenState();
 }
+
+/// Free band kept under the board: the grid sits high and the strip below
+/// it stays clear for the bottom chrome.
+const double _boardBottomReserve = 282;
 
 class _GameScreenState extends State<GameScreen> {
   Hex? _selected;
@@ -48,12 +54,20 @@ class _GameScreenState extends State<GameScreen> {
   Completer<void>? _banditCompleter;
 
   /// Production payout being floated over the board right now.
-  (List<ProductionGrant>, String, List<DroughtRelief>)? _production;
+  (
+    List<ProductionGrant>,
+    String,
+    List<({int playerId, Resource resource})>
+  )? _production;
   Completer<void>? _productionCompleter;
 
   /// Bot card play being revealed; the game waits until it fades.
   CardPlayed? _botCardPlay;
   Completer<void>? _botCardCompleter;
+
+  /// Whose-turn splash on screen: (label, player color).
+  (String, Color)? _turnSplash;
+  Completer<void>? _turnSplashCompleter;
 
   /// Board canvas size from the last layout, for overlay positioning.
   Size _boardSize = Size.zero;
@@ -91,6 +105,9 @@ class _GameScreenState extends State<GameScreen> {
   /// Whether the card fan is on screen (game-start reveal or icon tap).
   bool _cardFanOpen = false;
 
+  /// Second line under the fan title; only the game-start reveal sets it.
+  String? _fanSubtitle;
+
   /// Landmark shop, bank trade, and settings overlays.
   bool _shopOpen = false;
   bool _tradeOpen = false;
@@ -121,8 +138,14 @@ class _GameScreenState extends State<GameScreen> {
     setState(() {
       _showWelcome = false;
       _hudVisible = true;
-      final hand = state.players.firstWhere((p) => !p.isBot).hand;
-      _cardFanOpen = hand.isNotEmpty;
+      final human = state.players.firstWhere((p) => !p.isBot);
+      _cardFanOpen = human.hand.isNotEmpty;
+      // The opening reveal restates the secret task: the welcome card is
+      // already gone by the time the cards are in view.
+      final objective = objectiveCatalog[human.objectiveId];
+      _fanSubtitle = objective == null
+          ? null
+          : '🎯 Secret task: ${objective.description}';
     });
   }
 
@@ -233,13 +256,11 @@ class _GameScreenState extends State<GameScreen> {
     }
     if (!mounted) return;
     // Payout moment: float the gains (or the whiff) after an activation.
-    // Drought relief can also fire on a 7, which has no ActivationChosen.
     // The harvest card produces outside any roll, so it triggers the same
     // ceremony off its CardPlayed event.
     final chosen = events.whereType<ActivationChosen>();
-    final reliefs = events.whereType<DroughtRelief>().toList();
     final harvestPlayed = cardPlays.any((c) => c.cardId == 'harvest');
-    if (chosen.isNotEmpty || reliefs.isNotEmpty || harvestPlayed) {
+    if (chosen.isNotEmpty || harvestPlayed) {
       final grants = [
         for (final e in events.whereType<ResourcesProduced>()) ...e.grants,
       ];
@@ -258,7 +279,7 @@ class _GameScreenState extends State<GameScreen> {
       }
       final completer = Completer<void>();
       setState(() {
-        _production = (grants, emptyMessage, reliefs);
+        _production = (grants, emptyMessage, const []);
         _productionCompleter = completer;
       });
       await completer.future;
@@ -275,6 +296,36 @@ class _GameScreenState extends State<GameScreen> {
           const []
         );
         _productionCompleter = completer;
+      });
+      await completer.future;
+    }
+    if (!mounted) return;
+    // The periodic bank giveaway pays everyone at once: show it as chips.
+    final giveaway = events.whereType<ResourceGiveaway>().firstOrNull;
+    if (giveaway != null) {
+      final completer = Completer<void>();
+      setState(() {
+        _production = (
+          const [],
+          'Round ${giveaway.round} - free resource giveaway!',
+          giveaway.grants,
+        );
+        _productionCompleter = completer;
+      });
+      await completer.future;
+    }
+    if (!mounted) return;
+    // Hand-over beat: name whoever is up next before their play animates.
+    final turnEnded = events.whereType<TurnEnded>().firstOrNull;
+    if (turnEnded != null && state.phase != Phase.gameOver) {
+      final next = state.players[turnEnded.nextPlayerIndex];
+      final completer = Completer<void>();
+      setState(() {
+        _turnSplash = (
+          next.isBot ? "${next.name}'s turn" : 'Your turn',
+          BoardPainter.playerColors[next.id],
+        );
+        _turnSplashCompleter = completer;
       });
       await completer.future;
     }
@@ -316,6 +367,16 @@ class _GameScreenState extends State<GameScreen> {
       setState(() {
         _botCardPlay = null;
         _botCardCompleter = null;
+      });
+    }
+  }
+
+  void _onTurnSplashShown() {
+    _turnSplashCompleter?.complete();
+    if (mounted) {
+      setState(() {
+        _turnSplash = null;
+        _turnSplashCompleter = null;
       });
     }
   }
@@ -374,15 +435,13 @@ class _GameScreenState extends State<GameScreen> {
     };
   }
 
-  /// Owner-color glow: your tiles that can be upgraded right now.
-  Set<Hex> get _upgradeHighlighted {
-    if (!controller.isHumanTurn || _pendingCardId != null) return const {};
-    if (state.phase == Phase.awaitingBandit) return const {};
-    return legalActions(state)
-        .whereType<UpgradeHex>()
-        .map((a) => a.target)
-        .toSet();
-  }
+  /// True while a ceremony owns the screen - hints stay quiet until it ends.
+  bool get _busy =>
+      _rollingDice != null ||
+      _banditFlyTarget != null ||
+      _production != null ||
+      _botCardPlay != null ||
+      _turnSplash != null;
 
   /// Crimson glow: rival hexes you could seize right now.
   Set<Hex> get _seizeHighlighted {
@@ -418,10 +477,6 @@ class _GameScreenState extends State<GameScreen> {
       _tryDispatch(ClaimHex(hex));
       return;
     }
-    if (actions.contains(UpgradeHex(hex))) {
-      _tryDispatch(UpgradeHex(hex));
-      return;
-    }
     final seize = actions
         .whereType<SeizeHex>()
         .where((a) => a.target == hex)
@@ -431,6 +486,14 @@ class _GameScreenState extends State<GameScreen> {
       return;
     }
     setState(() => _selected = _selected == hex ? null : hex);
+  }
+
+  /// Upgrades from the inspector and keeps the tile selected, so the panel
+  /// shows it reaching Level 2 instead of emptying out.
+  Future<void> _upgradeSelected(Hex hex) async {
+    await _tryDispatch(UpgradeHex(hex));
+    if (!mounted || !state.tiles.containsKey(hex)) return;
+    setState(() => _selected = hex);
   }
 
   Future<void> _confirmSeize(SeizeHex action) async {
@@ -499,13 +562,13 @@ class _GameScreenState extends State<GameScreen> {
           return 'You can afford a landmark - tap the shop!';
         }
         if (canClaim && canUpgrade) {
-          return 'Claim an amber hex, or upgrade a glowing one of yours.';
+          return 'Claim an amber hex, or select one of yours to upgrade.';
         }
         if (canClaim) {
           return 'Claim a glowing hex for 1 wood + 1 brick.';
         }
         if (canUpgrade) {
-          return 'Upgrade a glowing hex - x2 output, more points.';
+          return 'Select a hex with a blue ↑, then hit Upgrade below.';
         }
         final canSeize = actions.any((a) => a is SeizeHex);
         if (canSeize) {
@@ -527,182 +590,226 @@ class _GameScreenState extends State<GameScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final human = state.players.firstWhere((p) => !p.isBot);
+    // Glow hints: something is actually buyable/tradeable right now, and no
+    // ceremony is running that would steal the eye.
+    final hints = controller.isHumanTurn && !_busy
+        ? legalActions(state)
+        : const <GameAction>[];
+    final shopGlow = hints.any((a) => a is BuyLandmark);
+    final tradeGlow = hints.any((a) => a is BankTrade);
     return Scaffold(
       backgroundColor: const Color(0xFF2E4034),
       body: Stack(
         key: _screenStackKey,
         children: [
+          // Every piece of chrome floats over the board, so the hex grid
+          // never shifts as buttons and banners come and go. The board box
+          // stops short of the bottom: the grid rides high and the reserved
+          // band under it stays free.
           SafeArea(
-        child: Column(
-          children: [
-            _TopBar(state: state),
-            _TipBar(
-              tipsOn: _tipsOn,
-              tip: _currentTip(),
-              onToggle: _toggleTips,
-            ),
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  _boardSize =
-                      Size(constraints.maxWidth, constraints.maxHeight);
-                  final geometry = BoardGeometry(_boardSize);
-                  return Stack(
-                    children: [
-                      BoardWidget(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // The grid centers in its box, so an inset at the top both
+                // clears the tip balloon and pulls the grid's bottom edge
+                // closer to the inspector. Eased off on short screens, where
+                // the board is the first thing to lose.
+                final boardTop =
+                    (constraints.maxHeight * 0.15).clamp(72.0, 112.0);
+                _boardSize = Size(
+                  constraints.maxWidth,
+                  (constraints.maxHeight - boardTop - _boardBottomReserve)
+                      .clamp(120.0, constraints.maxHeight),
+                );
+                // Board and overlays share one box and one geometry, so
+                // payout chips and the bandit land on the hexes they name.
+                final geometry = BoardGeometry(_boardSize);
+                return Stack(
+                  children: [
+                    Positioned(
+                      left: 0,
+                      top: boardTop,
+                      width: _boardSize.width,
+                      height: _boardSize.height,
+                      child: BoardWidget(
                         state: state,
                         highlighted: _highlighted,
-                        upgradeHighlighted: _upgradeHighlighted,
                         seizeHighlighted: _seizeHighlighted,
+                        humanPlayerId: human.id,
+                        upgradeAffordable: human.canAfford(Rules.upgradeCost),
                         selected: _selected,
                         hideBanditAt: _banditFlyTarget,
                         onTapHex: _onTapHex,
-                        onLongPressHex: (hex) => showModalBottomSheet<void>(
-                          context: context,
-                          builder: (_) => TileInfoSheet(
-                              state: state, tile: state.tiles[hex]!),
+                        // Long press is pure inspection: a claimable or
+                        // seizable hex can be studied without acting on it.
+                        onLongPressHex: (hex) =>
+                            setState(() => _selected = hex),
+                      ),
+                    ),
+                    Positioned(
+                      left: 10,
+                      top: 8,
+                      child: _TopLeftChrome(
+                        human: human,
+                        tipsOn: _tipsOn,
+                        tip: _currentTip(),
+                        // Clears the toggle column on its left and the
+                        // round/score cluster on its right.
+                        tipMaxWidth:
+                            (constraints.maxWidth - 158).clamp(140.0, 420.0),
+                        resourcesMaxWidth:
+                            (constraints.maxWidth - 116).clamp(140.0, 480.0),
+                        onToggleTips: _toggleTips,
+                        onOpenSettings: () =>
+                            setState(() => _settingsOpen = true),
+                      ),
+                    ),
+                    Positioned(
+                      right: 10,
+                      top: 8,
+                      child: _TopRightChrome(state: state),
+                    ),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: AnimatedSlide(
+                        offset:
+                            _hudVisible ? Offset.zero : const Offset(0, 1.4),
+                        duration: const Duration(milliseconds: 450),
+                        curve: Curves.easeOutCubic,
+                        // Opacity as well as the slide: the safe-area inset
+                        // still paints, so a slid-down cluster would peek
+                        // under the welcome card.
+                        child: AnimatedOpacity(
+                          opacity: _hudVisible ? 1 : 0,
+                          duration: const Duration(milliseconds: 250),
+                          // Hand, shop and trade live here as one row; the
+                          // glow state rides in the keys so widget tests can
+                          // assert it.
+                          child: _BottomCluster(
+                            controller: controller,
+                            rolling: _rollingDice != null,
+                            onAction: _tryDispatch,
+                            onOpenCards: () =>
+                                setState(() => _cardFanOpen = true),
+                            onOpenShop: () => setState(() => _shopOpen = true),
+                            onOpenTrade: () =>
+                                setState(() => _tradeOpen = true),
+                            shopGlow: shopGlow,
+                            tradeGlow: tradeGlow,
+                            cardIconKey: _cardIconKey,
+                            pendingCardId: _pendingCardId,
+                            onCancelPending: () =>
+                                setState(() => _pendingCardId = null),
+                            selectedTile: _selected == null
+                                ? null
+                                : state.tiles[_selected!],
+                            humanPlayerId: human.id,
+                            upgradeEnabled: _selected != null &&
+                                controller.isHumanTurn &&
+                                legalActions(state)
+                                    .contains(UpgradeHex(_selected!)),
+                            onUpgrade: () => _upgradeSelected(_selected!),
+                          ),
                         ),
                       ),
-                      if (_rollingDice != null)
-                        Center(
+                    ),
+                    // Ceremonies paint last: they own the screen while they
+                    // run, chrome included.
+                    if (_rollingDice != null)
+                      Positioned(
+                        left: 0,
+                        top: boardTop,
+                        width: _boardSize.width,
+                        height: _boardSize.height,
+                        child: Center(
                           child: DiceRollOverlay(
                             key: ValueKey(state.diceHistory.length),
                             d1: _rollingDice!.$1,
                             d2: _rollingDice!.$2,
                             rollDuration: _rollDuration,
                             holdDuration: _holdDuration,
-                            flyOffset:
-                                Offset(0, constraints.maxHeight / 2 + 30),
+                            // Tumble over the board, then fly down into the
+                            // reserved band below it.
+                            flyOffset: Offset(0, _boardSize.height / 2 + 30),
                             onDone: _onDiceSettled,
                           ),
                         ),
-                      if (_production != null)
-                        ProductionOverlay(
-                          key: ValueKey(state.diceHistory.length * 100 +
-                              _production!.$1.length),
-                          geometry: geometry,
-                          grants: _production!.$1,
-                          emptyMessage: _production!.$2,
-                          reliefs: _production!.$3,
-                          playerNames: [
-                            for (final p in state.players)
-                              p.isBot ? p.name : 'You',
-                          ],
-                          onDone: _onProductionShown,
-                        ),
-                      if (_botCardPlay != null)
-                        BotCardOverlay(
-                          key: ValueKey(_botCardPlay),
-                          cardId: _botCardPlay!.cardId,
-                          playerName:
-                              state.players[_botCardPlay!.playerId].name,
-                          playerColor: BoardPainter
-                              .playerColors[_botCardPlay!.playerId],
-                          onDone: _onBotCardShown,
-                        ),
-                      if (_banditFlyTarget != null)
-                        BanditFlyOverlay(
-                          key: ValueKey(_banditFlyTarget),
-                          start: Offset(constraints.maxWidth / 2,
-                              constraints.maxHeight / 2),
-                          target: geometry.centerOf(_banditFlyTarget!),
-                          endSize: geometry.hexSize * 0.80,
-                          onDone: _onBanditLanded,
-                        ),
-                      // Card-targeting banner floats over the board so the
-                      // layout (and the hex grid) never shifts.
-                      if (_pendingCardId != null)
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: Container(
-                            color: Colors.amber.shade800,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 4),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    '${cardCatalog[_pendingCardId]!.name}: '
-                                    'tap a glowing tile',
-                                    style:
-                                        const TextStyle(color: Colors.white),
-                                  ),
-                                ),
-                                TextButton(
-                                  onPressed: () =>
-                                      setState(() => _pendingCardId = null),
-                                  child: const Text('Cancel',
-                                      style:
-                                          TextStyle(color: Colors.white)),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      // Settings gear, tucked top-left under the tips bulb.
-                      Positioned(
-                        left: 10,
-                        top: 6,
-                        child: _RoundActionButton(
-                          enabled: true,
-                          onTap: () =>
-                              setState(() => _settingsOpen = true),
-                          child: const Icon(Icons.settings,
-                              size: 22, color: Color(0xFF3A2E20)),
-                        ),
                       ),
-                      // Always-visible shop and trade buttons, floating in
-                      // the board's corner so the layout never shifts.
+                    // Hex-anchored ceremonies get the board's own box: they
+                    // fill their parent, so without it they would paint
+                    // their chips a whole inset above the hexes.
+                    if (_production != null)
                       Positioned(
-                        right: 10,
-                        bottom: 10,
-                        child: Column(
+                        left: 0,
+                        top: boardTop,
+                        width: _boardSize.width,
+                        height: _boardSize.height,
+                        child: Stack(
                           children: [
-                            _RoundActionButton(
-                              enabled: controller.isHumanTurn &&
-                                  _rollingDice == null,
-                              onTap: () => setState(() => _shopOpen = true),
-                              child: const Text('🏛',
-                                  style: TextStyle(fontSize: 24)),
-                            ),
-                            const SizedBox(height: 10),
-                            _RoundActionButton(
-                              enabled: controller.isHumanTurn &&
-                                  _rollingDice == null,
-                              onTap: () => setState(() => _tradeOpen = true),
-                              child: const Icon(Icons.handshake,
-                                  size: 24, color: Color(0xFF3A2E20)),
+                            ProductionOverlay(
+                              key: ValueKey(state.diceHistory.length * 100 +
+                                  _production!.$1.length),
+                              geometry: geometry,
+                              grants: _production!.$1,
+                              emptyMessage: _production!.$2,
+                              bonuses: _production!.$3,
+                              playerNames: [
+                                for (final p in state.players)
+                                  p.isBot ? p.name : 'You',
+                              ],
+                              onDone: _onProductionShown,
                             ),
                           ],
                         ),
                       ),
-                    ],
-                  );
-                },
-              ),
+                    if (_botCardPlay != null)
+                      BotCardOverlay(
+                        key: ValueKey(_botCardPlay),
+                        cardId: _botCardPlay!.cardId,
+                        playerName: state.players[_botCardPlay!.playerId].name,
+                        playerColor:
+                            BoardPainter.playerColors[_botCardPlay!.playerId],
+                        onDone: _onBotCardShown,
+                      ),
+                    if (_turnSplash != null)
+                      TurnSplashOverlay(
+                        key: ValueKey(_turnSplash),
+                        text: _turnSplash!.$1,
+                        playerColor: _turnSplash!.$2,
+                        onDone: _onTurnSplashShown,
+                      ),
+                    if (_banditFlyTarget != null)
+                      Positioned(
+                        left: 0,
+                        top: boardTop,
+                        width: _boardSize.width,
+                        height: _boardSize.height,
+                        child: Stack(
+                          children: [
+                            BanditFlyOverlay(
+                              key: ValueKey(_banditFlyTarget),
+                              start: Offset(_boardSize.width / 2,
+                                  _boardSize.height / 2),
+                              target: geometry.centerOf(_banditFlyTarget!),
+                              endSize: geometry.hexSize * 0.80,
+                              onDone: _onBanditLanded,
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
-            AnimatedSlide(
-              offset: _hudVisible ? Offset.zero : const Offset(0, 1.1),
-              duration: const Duration(milliseconds: 450),
-              curve: Curves.easeOutCubic,
-              child: _Hud(
-                controller: controller,
-                rolling: _rollingDice != null,
-                onAction: _tryDispatch,
-                onOpenCards: () => setState(() => _cardFanOpen = true),
-                cardIconKey: _cardIconKey,
-              ),
-            ),
-          ],
-        ),
           ),
           if (_showWelcome)
             WelcomeOverlay(state: state, onStart: _dismissWelcome),
           if (_cardFanOpen)
             CardFanOverlay(
-              cardIds: state.players.firstWhere((p) => !p.isBot).hand,
+              cardIds: human.hand,
+              subtitle: _fanSubtitle,
               flyOffset: _fanFlyOffset(),
               playableCardIds: controller.isHumanTurn
                   ? legalActions(state)
@@ -718,7 +825,10 @@ class _GameScreenState extends State<GameScreen> {
                   : const {},
               onReplace: (id) => _tryDispatch(ReplaceCard(id)),
               onPlay: _handleCardPlay,
-              onDone: () => setState(() => _cardFanOpen = false),
+              onDone: () => setState(() {
+                _cardFanOpen = false;
+                _fanSubtitle = null;
+              }),
             ),
           if (_shopOpen)
             ShopOverlay(
@@ -753,184 +863,230 @@ class _GameScreenState extends State<GameScreen> {
   }
 }
 
-/// Circular parchment button for the floating board actions.
+/// Circular parchment button for the floating board actions. [glow] marks
+/// the ones with something on offer right now.
 class _RoundActionButton extends StatelessWidget {
   final bool enabled;
+  final bool glow;
+  final double size;
   final VoidCallback onTap;
   final Widget child;
 
   const _RoundActionButton({
+    super.key,
     required this.enabled,
     required this.onTap,
     required this.child,
+    this.glow = false,
+    this.size = 50,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Opacity(
-      opacity: enabled ? 1.0 : 0.35,
-      child: Material(
-        color: const Color(0xFFF4EAD4),
-        shape: const CircleBorder(
-          side: BorderSide(color: Color(0xFF8A6F4D), width: 2),
-        ),
-        elevation: 4,
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: enabled ? onTap : null,
-          child: SizedBox(
-            width: 50,
-            height: 50,
-            child: Center(child: child),
-          ),
+    final button = Material(
+      color: const Color(0xFFF4EAD4),
+      shape: CircleBorder(
+        side: BorderSide(
+          color: glow ? const Color(0xFFFFC107) : const Color(0xFF8A6F4D),
+          width: glow ? 2.5 : 2,
         ),
       ),
+      elevation: 4,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: enabled ? onTap : null,
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: Center(child: child),
+        ),
+      ),
+    );
+    // Static glow, not a pulse: a repeating controller would keep widget
+    // tests from ever settling.
+    return Opacity(
+      opacity: enabled ? 1.0 : 0.35,
+      child: glow
+          ? DecoratedBox(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.amber.withValues(alpha: 0.85),
+                    blurRadius: 14,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: button,
+            )
+          : button,
     );
   }
 }
 
-/// Fixed-height strip under the turn banner: a lightbulb toggle plus a
-/// short balloon explaining what is going on right now.
-class _TipBar extends StatelessWidget {
+/// Floating top-left chrome: the human's resources on one line, the tips
+/// and settings toggles stacked under them, and the contextual tip balloon
+/// beside the toggles.
+class _TopLeftChrome extends StatelessWidget {
+  final PlayerState human;
   final bool tipsOn;
   final String? tip;
-  final VoidCallback onToggle;
+  final double tipMaxWidth;
+  final double resourcesMaxWidth;
+  final VoidCallback onToggleTips;
+  final VoidCallback onOpenSettings;
 
-  const _TipBar({
+  const _TopLeftChrome({
+    required this.human,
     required this.tipsOn,
     required this.tip,
-    required this.onToggle,
+    required this.tipMaxWidth,
+    required this.resourcesMaxWidth,
+    required this.onToggleTips,
+    required this.onOpenSettings,
   });
+
+  static const resourceEmoji = {
+    Resource.wood: '🪵',
+    Resource.grain: '🌾',
+    Resource.brick: '🧱',
+    Resource.stone: '🪨',
+  };
 
   @override
   Widget build(BuildContext context) {
-    // Tablet cap: matches the top bar so the chrome reads as one column.
-    return SizedBox(
-      height: 36,
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 640),
-          child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Row(
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Scales down rather than running into the round counter on the
+        // narrowest phones.
+        ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: resourcesMaxWidth),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: chromePill(),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final r in Resource.values)
+                    Padding(
+                      padding: EdgeInsets.only(
+                          right: r == Resource.values.last ? 0 : 10),
+                      child: Text(
+                        '${resourceEmoji[r]} ${human.countOf(r)}',
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 15),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        // Toggles hug the left edge; the balloon sits beside them, anchored
+        // to the bulb it belongs to.
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            InkWell(
-              onTap: onToggle,
-              borderRadius: BorderRadius.circular(15),
-              child: Container(
-                width: 30,
-                height: 30,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: tipsOn
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _toggle(
+                  onTap: onToggleTips,
+                  background: tipsOn
                       ? Colors.amber.withValues(alpha: 0.25)
                       : Colors.white.withValues(alpha: 0.08),
-                  shape: BoxShape.circle,
+                  icon: Icon(
+                    Icons.lightbulb,
+                    size: 17,
+                    color: tipsOn ? Colors.amber : Colors.white38,
+                  ),
                 ),
-                child: Icon(
-                  Icons.lightbulb,
-                  size: 17,
-                  color: tipsOn ? Colors.amber : Colors.white38,
+                const SizedBox(height: 6),
+                _toggle(
+                  onTap: onOpenSettings,
+                  background: Colors.black.withValues(alpha: 0.35),
+                  icon: const Icon(Icons.settings,
+                      size: 17, color: Colors.white70),
                 ),
-              ),
+              ],
             ),
             if (tipsOn && tip != null) ...[
               const SizedBox(width: 8),
-              Flexible(
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: tipMaxWidth),
                 child: Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.35),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  decoration: chromePill(),
                   child: Text(
                     tip!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        color: Colors.white70, fontSize: 12),
+                    maxLines: 3,
+                    style:
+                        const TextStyle(color: Colors.white70, fontSize: 12),
                   ),
                 ),
               ),
             ],
           ],
         ),
-          ),
-        ),
+      ],
+    );
+  }
+
+  Widget _toggle({
+    required VoidCallback onTap,
+    required Color background,
+    required Widget icon,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(15),
+      child: Container(
+        width: 30,
+        height: 30,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(color: background, shape: BoxShape.circle),
+        child: icon,
       ),
     );
   }
 }
 
-class _TopBar extends StatelessWidget {
+/// Floating top-right chrome: the round counter with the score chips
+/// stacked under it.
+class _TopRightChrome extends StatelessWidget {
   final GameState state;
 
-  const _TopBar({required this.state});
+  const _TopRightChrome({required this.state});
 
   @override
   Widget build(BuildContext context) {
-    final current = state.currentPlayer;
-    final currentColor = BoardPainter.playerColors[current.id];
-    // Tablet cap: chrome content stays readable instead of smearing across
-    // the full width. Inert on phones (below 640px).
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 640),
-        child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Text(
-                'Round ${state.round}/${state.roundCap}',
-                style: const TextStyle(color: Colors.white70, fontSize: 13),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        for (final p in state.players) _playerChip(p),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: chromePill(),
+          child: Text(
+            'Round ${state.round}/${state.roundCap}',
+            style: const TextStyle(color: Colors.white70, fontSize: 13),
           ),
-          const SizedBox(height: 6),
-          // Whose-turn banner in the active player's color.
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 5),
-            decoration: BoxDecoration(
-              color: currentColor.withValues(alpha: 0.9),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              state.phase == Phase.gameOver
-                  ? 'Game over'
-                  : current.isBot
-                      ? '${current.name} is playing…'
-                      : 'Your turn',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-              ),
-            ),
-          ),
-        ],
-      ),
         ),
-      ),
+        const SizedBox(height: 6),
+        for (final p in state.players)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: _playerChip(p),
+          ),
+      ],
     );
   }
 
@@ -938,10 +1094,9 @@ class _TopBar extends StatelessWidget {
     final active = state.currentPlayerIndex == p.id;
     final color = BoardPainter.playerColors[p.id];
     return Container(
-      margin: const EdgeInsets.only(left: 6),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: active ? color : Colors.transparent,
+        color: active ? color : Colors.black.withValues(alpha: 0.35),
         border: Border.all(color: color, width: 1.5),
         borderRadius: BorderRadius.circular(20),
       ),
@@ -957,135 +1112,215 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-class _Hud extends StatelessWidget {
+/// Floating bottom chrome: the secret-task line and the hand/shop/trade
+/// buttons on one row, with the action row alone on the line below it.
+class _BottomCluster extends StatelessWidget {
   final GameController controller;
   final bool rolling;
   final Future<void> Function(GameAction) onAction;
   final VoidCallback onOpenCards;
+  final VoidCallback onOpenShop;
+  final VoidCallback onOpenTrade;
+  final bool shopGlow;
+  final bool tradeGlow;
   final GlobalKey? cardIconKey;
 
-  const _Hud({
+  /// Card waiting for a tile tap; its banner rides above the cluster.
+  final String? pendingCardId;
+  final VoidCallback onCancelPending;
+
+  /// Inspector feed: the selected tile (null = nothing selected) and the
+  /// upgrade it offers.
+  final Tile? selectedTile;
+  final int humanPlayerId;
+  final bool upgradeEnabled;
+  final VoidCallback onUpgrade;
+
+  const _BottomCluster({
     required this.controller,
     required this.rolling,
     required this.onAction,
     required this.onOpenCards,
+    required this.onOpenShop,
+    required this.onOpenTrade,
+    required this.shopGlow,
+    required this.tradeGlow,
+    required this.pendingCardId,
+    required this.onCancelPending,
+    required this.selectedTile,
+    required this.humanPlayerId,
+    required this.upgradeEnabled,
+    required this.onUpgrade,
     this.cardIconKey,
   });
 
-  static const resourceEmoji = {
-    Resource.wood: '🪵',
-    Resource.grain: '🌾',
-    Resource.brick: '🧱',
-    Resource.stone: '🪨',
-  };
+  /// Shared size for the hand/shop/trade trio so they read as one family.
+  static const _buttonSize = 44.0;
 
   @override
   Widget build(BuildContext context) {
     final state = controller.state!;
     final human = state.players.firstWhere((p) => !p.isBot);
-    // The bar itself spans the full screen; only its content is capped so
-    // tablet controls sit centered instead of smearing edge to edge.
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-      decoration: const BoxDecoration(
-        color: Color(0xFF243329),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 640),
+    final buttonsEnabled = controller.isHumanTurn && !rolling;
+    // Tablet cap: the controls stay centered instead of smearing edge to
+    // edge. Inert on phones (below 640px).
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 640),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
           child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Every row has a FIXED height so the HUD (and the board above it)
-          // never shifts as buttons come and go.
-          SizedBox(
-            height: 40,
-            child: Align(
-            alignment: Alignment.centerLeft,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final r in Resource.values)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 14),
-                      child: Text(
-                        '${resourceEmoji[r]} ${human.countOf(r)}',
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 16),
-                      ),
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TileInspector(
+                state: state,
+                tile: selectedTile,
+                humanPlayerId: humanPlayerId,
+                upgradeEnabled: upgradeEnabled,
+                onUpgrade: onUpgrade,
+              ),
+              const SizedBox(height: 8),
+              if (pendingCardId != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade800,
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  // Dry-streak meter: relief pays out when it fills.
-                  if (human.droughtStreak > 0)
-                    Tooltip(
-                      message: 'Dry rolls - a free resource at '
-                          '${Rules.droughtReliefThreshold}',
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 14),
-                        child: Text(
-                          '🍀 ${human.droughtStreak}/'
-                          '${Rules.droughtReliefThreshold}',
-                          style: const TextStyle(
-                              color: Colors.white54, fontSize: 14),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${cardCatalog[pendingCardId]!.name}: '
+                            'tap a glowing tile',
+                            style: const TextStyle(color: Colors.white),
+                          ),
                         ),
+                        TextButton(
+                          onPressed: onCancelPending,
+                          child: const Text('Cancel',
+                              style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              Row(
+                children: [
+                  // Expanded (not Flexible beside a Spacer): with both
+                  // claiming flex the pill was sized to half the free width
+                  // while its text painted on past the background.
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: _taskLine(state, human),
                       ),
                     ),
+                  ),
                   const SizedBox(width: 8),
-                  if (controller.isHumanTurn)
-                    InkWell(
-                      key: cardIconKey,
-                      onTap: onOpenCards,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
+                  _RoundActionButton(
+                    key: cardIconKey,
+                    size: _buttonSize,
+                    enabled: buttonsEnabled,
+                    onTap: onOpenCards,
+                    // The painter is drawn at 44x32; fit it to the disc.
+                    child: SizedBox(
+                      width: 30,
+                      height: 22,
+                      child: FittedBox(
                         child: CardFanIcon(count: human.hand.length),
                       ),
                     ),
+                  ),
+                  const SizedBox(width: 8),
+                  _RoundActionButton(
+                    key: ValueKey(shopGlow ? 'shop-glow' : 'shop'),
+                    size: _buttonSize,
+                    enabled: buttonsEnabled,
+                    glow: shopGlow,
+                    onTap: onOpenShop,
+                    child: const Text('🏛', style: TextStyle(fontSize: 21)),
+                  ),
+                  const SizedBox(width: 8),
+                  _RoundActionButton(
+                    key: ValueKey(tradeGlow ? 'trade-glow' : 'trade'),
+                    size: _buttonSize,
+                    enabled: buttonsEnabled,
+                    glow: tradeGlow,
+                    onTap: onOpenTrade,
+                    child: const Icon(Icons.handshake,
+                        size: 21, color: Color(0xFF3A2E20)),
+                  ),
                 ],
               ),
-            ),
-            ),
-          ),
-          SizedBox(
-            height: 18,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                human.objectiveId == null
-                    ? ''
-                    : '🎯 ${objectiveCatalog[human.objectiveId]!.description}'
-                        ' · +${objectiveCatalog[human.objectiveId]!.bonusVp} at game end',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.white38, fontSize: 11),
+              const SizedBox(height: 8),
+              // Fixed height: buttons coming and going must never move the
+              // board underneath.
+              SizedBox(
+                height: 84,
+                child: Center(child: _actionRow(context, state)),
               ),
-            ),
+            ],
           ),
-          const SizedBox(height: 6),
-          SizedBox(
-            height: 72,
-            child: Center(child: _actionRow(context, state)),
-          ),
-        ],
-      ),
         ),
       ),
     );
   }
 
-  Widget _actionRow(BuildContext context, GameState state) {
-    if (rolling) {
-      return const Text('Rolling…', style: TextStyle(color: Colors.white54));
-    }
-    if (!controller.isHumanTurn) {
-      return Text(
-        '${state.currentPlayer.name} is playing…',
-        style: const TextStyle(color: Colors.white54),
+  /// Live objective progress: the count alone, never truncated. The
+  /// objective's name lives in the tooltip and the opening briefing.
+  /// Turns gold on the round it completes.
+  Widget _taskLine(GameState state, PlayerState human) {
+    final objective = objectiveCatalog[human.objectiveId];
+    if (objective == null) return const SizedBox(height: _buttonSize);
+    final (current, target) = objective.progress(state, human.id);
+    final done = current >= target;
+    return Tooltip(
+      message: objective.description,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: chromePill(),
+        child: Text(
+          '🎯 ${done ? target : current}/$target ${objective.shortLabel}'
+          '${done ? ' ✓' : ''}',
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.visible,
+          style: TextStyle(
+            color: done ? const Color(0xFFFFCA28) : Colors.white70,
+            fontSize: 14,
+            fontWeight: done ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Status text needs its own backing out here over the board art. One
+  /// line only: the action slot has a fixed height so the board never
+  /// shifts, and the tip balloon carries the longer wording.
+  Widget _statusPill(String text, {Color color = Colors.white70}) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: chromePill(),
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: color, fontSize: 12.5),
+        ),
       );
+
+  Widget _actionRow(BuildContext context, GameState state) {
+    if (rolling) return _statusPill('Rolling…');
+    if (!controller.isHumanTurn) {
+      return _statusPill('${state.currentPlayer.name} is playing…');
     }
     switch (state.phase) {
       case Phase.awaitingRoll:
@@ -1100,45 +1335,41 @@ class _Hud extends StatelessWidget {
         return FittedBox(
           fit: BoxFit.scaleDown,
           child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            MiniDie(d1),
-            const SizedBox(width: 5),
-            MiniDie(d2),
-            const SizedBox(width: 12),
-            FilledButton(
-              onPressed: () =>
-                  onAction(const ChooseActivation(ActivationMode.sum)),
-              child: Text(sum == 7 ? 'Bandit!' : 'Sum $sum'),
-            ),
-            const SizedBox(width: 8),
-            FilledButton.tonal(
-              onPressed: () =>
-                  onAction(const ChooseActivation(ActivationMode.split)),
-              child: Text('Split $d1 & $d2'),
-            ),
-          ],
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              MiniDie(d1),
+              const SizedBox(width: 5),
+              MiniDie(d2),
+              const SizedBox(width: 12),
+              FilledButton(
+                onPressed: () =>
+                    onAction(const ChooseActivation(ActivationMode.sum)),
+                child: Text(sum == 7 ? 'Bandit!' : 'Sum $sum'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.tonal(
+                onPressed: () =>
+                    onAction(const ChooseActivation(ActivationMode.split)),
+                child: Text('Split $d1 & $d2'),
+              ),
+            ],
           ),
         );
       case Phase.awaitingBandit:
-        return const Text(
-          'Place the bandit: tap any claimed tile',
-          style: TextStyle(color: Colors.amber),
-        );
+        return _statusPill('Place the bandit: tap any claimed tile',
+            color: Colors.amber);
       case Phase.main:
         final canRemoveBandit =
             legalActions(state).whereType<RemoveBandit>().isNotEmpty;
-        final canBuild = legalActions(state)
-            .any((a) => a is ClaimHex || a is UpgradeHex);
+        final canBuild =
+            legalActions(state).any((a) => a is ClaimHex || a is UpgradeHex);
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
+            _statusPill(
               canBuild
-                  ? 'Tap a glowing tile to claim or upgrade it'
+                  ? 'Tap a glowing tile to claim it'
                   : 'Nothing affordable - end your turn',
-              style: const TextStyle(color: Colors.white54, fontSize: 12),
-              overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 4),
             FittedBox(
@@ -1166,5 +1397,4 @@ class _Hud extends StatelessWidget {
         return const SizedBox.shrink();
     }
   }
-
 }

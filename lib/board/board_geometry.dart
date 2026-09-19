@@ -34,16 +34,22 @@ class BoardGeometry {
     return Hex.fromPixel(local.dx, local.dy, hexSize);
   }
 
-  /// The 6 corners of a pointy-top hex, slightly inset for tile gaps.
-  List<Offset> cornersOf(Hex hex, {double inset = 0.94}) {
-    final center = centerOf(hex);
+  /// The 6 corners of a pointy-top hex of [size] around [center], slightly
+  /// inset for tile gaps. Static so anything drawing a hex off the board
+  /// (the inspector preview) shares this geometry.
+  static List<Offset> hexCorners(Offset center, double size,
+      {double inset = 0.94}) {
     return [
       for (var i = 0; i < 6; i++)
         center +
             Offset.fromDirection(
               (60.0 * i - 30) * math.pi / 180,
-              hexSize * inset,
+              size * inset,
             ),
     ];
   }
+
+  /// The 6 corners of [hex] on this board.
+  List<Offset> cornersOf(Hex hex, {double inset = 0.94}) =>
+      hexCorners(centerOf(hex), hexSize, inset: inset);
 }

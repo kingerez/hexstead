@@ -8,8 +8,8 @@ import '../board/board_painter.dart';
 
 /// After an activation, floats "+N icon" chips up from every producing hex
 /// in the producer's color - or a "no hexes matched" notice when the roll
-/// paid nobody. Drought-relief payouts float as centered chips since they
-/// come from the bank, not a hex. Awaited by the game loop so the payout is
+/// paid nobody. Giveaway payouts float as centered chips since they come
+/// from the bank, not a hex. Awaited by the game loop so the payout is
 /// always seen.
 class ProductionOverlay extends StatefulWidget {
   final BoardGeometry geometry;
@@ -17,7 +17,7 @@ class ProductionOverlay extends StatefulWidget {
 
   /// Explanation shown when nothing produced; empty string suppresses it.
   final String emptyMessage;
-  final List<DroughtRelief> reliefs;
+  final List<({int playerId, Resource resource})> bonuses;
   final List<String> playerNames;
   final VoidCallback onDone;
 
@@ -26,7 +26,7 @@ class ProductionOverlay extends StatefulWidget {
     required this.geometry,
     required this.grants,
     required this.emptyMessage,
-    this.reliefs = const [],
+    this.bonuses = const [],
     this.playerNames = const [],
     required this.onDone,
   });
@@ -86,7 +86,7 @@ class _ProductionOverlayState extends State<ProductionOverlay>
                   _chip(grant, i, opacity, rise),
                 if ((widget.grants.isEmpty &&
                         widget.emptyMessage.isNotEmpty) ||
-                    widget.reliefs.isNotEmpty)
+                    widget.bonuses.isNotEmpty)
                   Center(
                     child: Opacity(
                       opacity: opacity,
@@ -108,8 +108,8 @@ class _ProductionOverlayState extends State<ProductionOverlay>
                                     color: Colors.white70, fontSize: 15),
                               ),
                             ),
-                          for (final relief in widget.reliefs)
-                            _reliefChip(relief),
+                          for (final bonus in widget.bonuses)
+                            _bonusChip(bonus),
                         ],
                       ),
                     ),
@@ -122,16 +122,16 @@ class _ProductionOverlayState extends State<ProductionOverlay>
     );
   }
 
-  /// Bank payout for a starving player: no source hex, so it floats center.
-  Widget _reliefChip(DroughtRelief relief) {
-    final name = relief.playerId < widget.playerNames.length
-        ? widget.playerNames[relief.playerId]
+  /// Bank payout: no source hex, so it floats center.
+  Widget _bonusChip(({int playerId, Resource resource}) bonus) {
+    final name = bonus.playerId < widget.playerNames.length
+        ? widget.playerNames[bonus.playerId]
         : '?';
     return Container(
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       decoration: BoxDecoration(
-        color: BoardPainter.playerColors[relief.playerId],
+        color: BoardPainter.playerColors[bonus.playerId],
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white, width: 1.5),
         boxShadow: const [
@@ -139,7 +139,7 @@ class _ProductionOverlayState extends State<ProductionOverlay>
         ],
       ),
       child: Text(
-        '🍀 $name +1 ${_resourceEmoji[relief.resource]}',
+        '🎁 $name +1 ${_resourceEmoji[bonus.resource]}',
         style: const TextStyle(
           color: Colors.white,
           fontSize: 15,

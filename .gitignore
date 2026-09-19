@@ -45,3 +45,5 @@ app.*.map.json
 /android/app/release
 ios/build/
 art_inbox/
+packages/*/build/
+packages/*/.dart_tool/

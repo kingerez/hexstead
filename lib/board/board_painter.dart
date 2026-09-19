@@ -10,10 +10,6 @@ class BoardPainter extends CustomPainter {
   final GameState state;
   final Set<Hex> highlighted;
 
-  /// Owned hexes that can be upgraded: glow in their owner's color so the
-  /// signal reads differently from claimable (amber) hexes.
-  final Set<Hex> upgradeHighlighted;
-
   /// Rival hexes that can be seized (board full): crimson glow.
   final Set<Hex> seizeHighlighted;
   final Hex? selected;
@@ -22,13 +18,20 @@ class BoardPainter extends CustomPainter {
   /// is still in flight.
   final Hex? hideBanditAt;
 
+  /// Whose tiles carry the upgrade badge; null hides badges entirely.
+  final int? humanPlayerId;
+
+  /// Drives the badge's two states: grey (save up) vs blue (upgrade now).
+  final bool upgradeAffordable;
+
   const BoardPainter({
     required this.state,
     this.highlighted = const {},
-    this.upgradeHighlighted = const {},
     this.seizeHighlighted = const {},
     this.selected,
     this.hideBanditAt,
+    this.humanPlayerId,
+    this.upgradeAffordable = false,
   });
 
   static const terrainColors = {
@@ -73,6 +76,73 @@ class BoardPainter extends CustomPainter {
     for (final tile in state.tiles.values) {
       _paintTile(canvas, geometry, tile);
     }
+    // Badges last: they hang over the hex rim, so a neighbor painted later
+    // must not clip them.
+    for (final tile in state.tiles.values) {
+      _paintUpgradeBadge(canvas, geometry, tile);
+    }
+  }
+
+  /// Level-1 tiles of the human player advertise their upgrade: muted grey
+  /// while the cost is out of reach, vivid blue the moment it is in hand.
+  void _paintUpgradeBadge(Canvas canvas, BoardGeometry geometry, Tile tile) {
+    if (humanPlayerId == null ||
+        tile.ownerId != humanPlayerId ||
+        tile.level != 1) {
+      return;
+    }
+    final hexSize = geometry.hexSize;
+    final center = geometry.centerOf(tile.coord) +
+        Offset(hexSize * 0.35, -hexSize * 0.43);
+    final radius = hexSize * 0.17;
+
+    if (upgradeAffordable) {
+      canvas.drawCircle(
+        center,
+        radius * 1.5,
+        Paint()
+          ..color = const Color(0xFF2F8FE8).withValues(alpha: 0.7)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+      );
+    }
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..color = upgradeAffordable
+            ? const Color(0xFF2F8FE8)
+            : const Color(0xCC757575),
+    );
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = radius * 0.16
+        ..color = const Color(0x99000000),
+    );
+
+    // Arrow drawn as geometry, not glyphs: emoji and icon fonts render
+    // inconsistently on canvas across platforms.
+    final arrow = Paint()
+      ..color = upgradeAffordable ? Colors.white : Colors.white70;
+    canvas.drawPath(
+      Path()
+        ..moveTo(center.dx, center.dy - radius * 0.58)
+        ..lineTo(center.dx - radius * 0.52, center.dy + radius * 0.02)
+        ..lineTo(center.dx + radius * 0.52, center.dy + radius * 0.02)
+        ..close(),
+      arrow,
+    );
+    canvas.drawRect(
+      Rect.fromLTRB(
+        center.dx - radius * 0.18,
+        center.dy - radius * 0.02,
+        center.dx + radius * 0.18,
+        center.dy + radius * 0.55,
+      ),
+      arrow,
+    );
   }
 
   void _paintTile(Canvas canvas, BoardGeometry geometry, Tile tile) {
@@ -84,21 +154,25 @@ class BoardPainter extends CustomPainter {
     final sprite = ArtStore.instance.tileImage(tile.terrain);
     if (sprite != null) {
       // Real art: fill the hex with the sprite, clipped to the hex shape.
-      // Sample a sub-window offset by a per-hex hash so same-terrain tiles
-      // show different slices of the one image instead of a stamped repeat.
       canvas.save();
       canvas.clipPath(path);
       final bounds = path.getBounds();
       final spriteW = sprite.width.toDouble();
       final spriteH = sprite.height.toDouble();
-      const window = 0.75;
-      final seed =
-          (tile.coord.q * 92837111) ^ (tile.coord.r * 689287499);
-      final dx = (seed.abs() & 0xFF) / 255 * spriteW * (1 - window);
-      final dy = ((seed.abs() >> 8) & 0xFF) / 255 * spriteH * (1 - window);
+      // Forest only: a per-hex sub-window breaks up the stamped repeat of a
+      // canopy. Every other terrain reads as a landform, and sliding its
+      // art around just looks like the hex is misaligned.
+      var src = Rect.fromLTWH(0, 0, spriteW, spriteH);
+      if (tile.terrain == TerrainType.forest) {
+        const window = 0.75;
+        final seed = (tile.coord.q * 92837111) ^ (tile.coord.r * 689287499);
+        final dx = (seed.abs() & 0xFF) / 255 * spriteW * (1 - window);
+        final dy = ((seed.abs() >> 8) & 0xFF) / 255 * spriteH * (1 - window);
+        src = Rect.fromLTWH(dx, dy, spriteW * window, spriteH * window);
+      }
       canvas.drawImageRect(
         sprite,
-        Rect.fromLTWH(dx, dy, spriteW * window, spriteH * window),
+        src,
         bounds,
         Paint()..filterQuality = FilterQuality.medium,
       );
@@ -225,26 +299,6 @@ class BoardPainter extends CustomPainter {
       }
     }
 
-    // Upgradable tiles glow in their OWNER's color.
-    if (upgradeHighlighted.contains(tile.coord) && tile.ownerId != null) {
-      final ownerColor = playerColors[tile.ownerId!];
-      canvas.drawPath(
-        path,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = hexSize * 0.18
-          ..color = ownerColor
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
-      );
-      canvas.drawPath(
-        path,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = hexSize * 0.05
-          ..color = Colors.white.withValues(alpha: 0.9),
-      );
-    }
-
     // Seizable rival tiles burn crimson - late-game aggression.
     if (seizeHighlighted.contains(tile.coord)) {
       canvas.drawPath(
@@ -304,8 +358,9 @@ class BoardPainter extends CustomPainter {
   bool shouldRepaint(BoardPainter old) =>
       old.state != state ||
       old.highlighted != highlighted ||
-      old.upgradeHighlighted != upgradeHighlighted ||
       old.seizeHighlighted != seizeHighlighted ||
       old.selected != selected ||
-      old.hideBanditAt != hideBanditAt;
+      old.hideBanditAt != hideBanditAt ||
+      old.humanPlayerId != humanPlayerId ||
+      old.upgradeAffordable != upgradeAffordable;
 }

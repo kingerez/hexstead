@@ -95,7 +95,6 @@ Map<String, dynamic> _playerToJson(PlayerState p) => {
       'landmarkIds': p.landmarkIds,
       'cardPlayedThisTurn': p.cardPlayedThisTurn,
       'cardReplacedThisGame': p.cardReplacedThisGame,
-      'droughtStreak': p.droughtStreak,
     };
 
 PlayerState _playerFromJson(Map<String, dynamic> json) => PlayerState(
@@ -113,5 +112,4 @@ PlayerState _playerFromJson(Map<String, dynamic> json) => PlayerState(
       cardPlayedThisTurn: json['cardPlayedThisTurn'] as bool,
       cardReplacedThisGame:
           (json['cardReplacedThisGame'] ?? false) as bool,
-      droughtStreak: (json['droughtStreak'] ?? 0) as int,
     );

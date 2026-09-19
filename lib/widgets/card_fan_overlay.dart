@@ -25,6 +25,10 @@ class CardFanOverlay extends StatefulWidget {
   final void Function(String cardId)? onPlay;
   final VoidCallback onDone;
 
+  /// Optional second line under the title - the game-start reveal uses it
+  /// to restate the secret task while the hand is on screen.
+  final String? subtitle;
+
   const CardFanOverlay({
     super.key,
     required this.cardIds,
@@ -34,6 +38,7 @@ class CardFanOverlay extends StatefulWidget {
     this.replaceableCardIds = const {},
     this.onPlay,
     this.onReplace,
+    this.subtitle,
   });
 
   @override
@@ -97,7 +102,19 @@ class _CardFanOverlayState extends State<CardFanOverlay>
                     children: [
                       Opacity(
                         opacity: (1 - flyT).clamp(0.0, 1.0),
-                        child: const _OutlinedTitle('Your cards'),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const OutlinedTitle('Your cards'),
+                            if (widget.subtitle != null)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                    top: 6, left: 16, right: 16),
+                                child:
+                                    OutlinedTitle(widget.subtitle!, size: 15),
+                              ),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 18),
                       if (widget.cardIds.isEmpty)
@@ -267,31 +284,33 @@ class ActionCardFace extends StatelessWidget {
 }
 
 /// White title with a dark stroke so it reads over any board colors.
-class _OutlinedTitle extends StatelessWidget {
+class OutlinedTitle extends StatelessWidget {
   final String text;
+  final double size;
 
-  const _OutlinedTitle(this.text);
+  const OutlinedTitle(this.text, {super.key, this.size = 24});
 
   @override
   Widget build(BuildContext context) {
-    const size = 24.0;
     const weight = FontWeight.w800;
     return Stack(
       children: [
         Text(
           text,
+          textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: size,
             fontWeight: weight,
             foreground: Paint()
               ..style = PaintingStyle.stroke
-              ..strokeWidth = 5
+              ..strokeWidth = size * 0.2
               ..color = Colors.black87,
           ),
         ),
         Text(
           text,
-          style: const TextStyle(
+          textAlign: TextAlign.center,
+          style: TextStyle(
             fontSize: size,
             fontWeight: weight,
             color: Colors.white,

@@ -117,11 +117,6 @@ class WelcomeOverlay extends StatelessWidget {
                     color: Color(0xFF9A6B1F),
                   ),
                 ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Your rivals can\'t see it.',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF7A6647)),
-                ),
               ],
             ),
           ],

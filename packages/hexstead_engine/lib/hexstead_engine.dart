@@ -11,6 +11,8 @@ export 'src/events.dart';
 export 'src/legal_moves.dart';
 export 'src/model/game_state.dart';
 export 'src/model/player.dart';
+export 'src/odds.dart';
+export 'src/production.dart';
 export 'src/reducer.dart';
 export 'src/scoring.dart';
 export 'src/serialization.dart';

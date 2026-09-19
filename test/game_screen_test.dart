@@ -1,10 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hexstead/board/board_widget.dart';
 import 'package:hexstead/screens/game_screen.dart';
 import 'package:hexstead/widgets/card_fan_overlay.dart';
 import 'package:hexstead/widgets/dice_roll_overlay.dart';
-import 'package:hexstead/widgets/tile_info_sheet.dart';
+import 'package:hexstead/widgets/tile_inspector.dart';
 import 'package:hexstead/state/game_controller.dart';
 import 'package:hexstead/state/persistence.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
@@ -32,6 +34,66 @@ Future<void> dismissWelcome(WidgetTester tester) async {
   // The starting-hand fan dismisses with a tap anywhere outside the cards.
   await tester.tapAt(const Offset(10, 100));
   await tester.pumpAndSettle();
+}
+
+/// Resumed mid-game state (so no welcome card): human to act in the main
+/// phase, owning two forests, with whatever purse and offer a test needs.
+GameState fixture({
+  Map<Resource, int> resources = const {},
+  List<String> landmarkOffer = const [],
+  String objectiveId = 'forester',
+}) {
+  const tilesSpec = [
+    (Hex(0, 0), TerrainType.forest, 8, 0, 1),
+    (Hex(1, 0), TerrainType.forest, 9, 0, 1),
+    (Hex(0, 1), TerrainType.hill, 4, 1, 1),
+    (Hex(1, -1), TerrainType.mountain, 6, null, 0),
+  ];
+  return GameState(
+    seed: 1,
+    rng: GameRng(1),
+    round: 3,
+    roundCap: 15,
+    targetVp: 99,
+    currentPlayerIndex: 0,
+    phase: Phase.main,
+    tiles: {
+      for (final (coord, terrain, number, owner, level) in tilesSpec)
+        coord: Tile(
+          coord: coord,
+          terrain: terrain,
+          number: number,
+          ownerId: owner,
+          level: level,
+        ),
+    },
+    players: [
+      PlayerState(
+        id: 0,
+        name: 'You',
+        isBot: false,
+        resources: resources,
+        objectiveId: objectiveId,
+      ),
+      const PlayerState(id: 1, name: 'Bot', isBot: true),
+    ],
+    landmarkOffer: landmarkOffer,
+    lastDice: (3, 5),
+    diceHistory: [(3, 5)],
+  );
+}
+
+Future<GameController> pumpResumed(WidgetTester tester, GameState s) async {
+  SharedPreferences.setMockInitialValues({});
+  final store = InMemorySaveStore()..saved = jsonEncode(gameStateToJson(s));
+  final controller =
+      GameController(saveStore: store, botStepDelay: Duration.zero);
+  await controller.resume();
+  await tester.pumpWidget(
+    MaterialApp(home: GameScreen(controller: controller)),
+  );
+  await tester.pumpAndSettle();
+  return controller;
 }
 
 void main() {
@@ -259,8 +321,7 @@ void main() {
     expect(controller.isHumanTurn, isTrue);
   });
 
-  testWidgets('long-pressing a tile opens the tile info sheet',
-      (tester) async {
+  testWidgets('the inspector starts empty and says so', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final controller = GameController(
       saveStore: InMemorySaveStore(),
@@ -274,19 +335,70 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: GameScreen(controller: controller)),
     );
-
     await dismissWelcome(tester);
-    // Long-press the board's center (the middle hex always exists).
-    final board = find.byType(BoardWidget);
-    await tester.longPress(board);
+
+    expect(find.byType(TileInspector), findsOneWidget);
+    expect(find.text('Select a tile to view it'), findsOneWidget);
+  });
+
+  testWidgets('long-pressing a tile fills the inspector', (tester) async {
+    await pumpResumed(tester, fixture());
+
+    // The board's center is Hex(0, 0): the human's level-1 forest.
+    await tester.longPress(find.byType(BoardWidget));
     await tester.pumpAndSettle();
 
-    expect(find.byType(TileInfoSheet), findsOneWidget);
-    // Sheet names the terrain and explains ownership or claimability.
-    expect(
-      find.textContaining(RegExp('Forest|Field|Hill|Mountain|Desert')),
-      findsWidgets,
+    expect(find.text('Select a tile to view it'), findsNothing);
+    expect(find.text('Forest · Level 1'), findsOneWidget);
+    expect(find.text('Owner: You'), findsOneWidget);
+    expect(find.text('Rolls 8 · 14% per roll'), findsOneWidget);
+  });
+
+  testWidgets('tapping your own hex selects it instead of upgrading it',
+      (tester) async {
+    final controller = await pumpResumed(
+      tester,
+      fixture(resources: const {Resource.grain: 2, Resource.stone: 1}),
     );
+
+    await tester.tap(find.byType(BoardWidget));
+    await tester.pumpAndSettle();
+
+    expect(controller.state!.tiles[const Hex(0, 0)]!.level, 1);
+    final button =
+        tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Upgrade'));
+    expect(button.onPressed, isNotNull);
+  });
+
+  testWidgets('the inspector Upgrade button upgrades the selected hex',
+      (tester) async {
+    final controller = await pumpResumed(
+      tester,
+      fixture(resources: const {Resource.grain: 2, Resource.stone: 1}),
+    );
+
+    await tester.tap(find.byType(BoardWidget));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Upgrade'));
+    await tester.pumpAndSettle();
+
+    expect(controller.state!.tiles[const Hex(0, 0)]!.level, 2);
+    // Selection survives the dispatch, so the panel shows the new level.
+    expect(find.text('Forest · Level 2'), findsOneWidget);
+    expect(find.text('Max level'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Upgrade'), findsNothing);
+  });
+
+  testWidgets('the Upgrade button is disabled when the cost is out of reach',
+      (tester) async {
+    await pumpResumed(tester, fixture(resources: const {Resource.grain: 1}));
+
+    await tester.tap(find.byType(BoardWidget));
+    await tester.pumpAndSettle();
+
+    final button =
+        tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Upgrade'));
+    expect(button.onPressed, isNull);
   });
 
   testWidgets('rolling shows the dice animation, then the choice buttons',
@@ -318,5 +430,119 @@ void main() {
     // Settled: overlay gone, the sum-or-split decision is on screen.
     expect(find.byType(DiceRollOverlay), findsNothing);
     expect(find.textContaining('Split'), findsOneWidget);
+  });
+
+  testWidgets('ending a turn splashes the incoming player, then clears',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final controller = GameController(
+      saveStore: InMemorySaveStore(),
+      botStepDelay: Duration.zero,
+    );
+    await controller.startNewGame(seed: 9, players: const [
+      PlayerSetup(name: 'You', isBot: false),
+      PlayerSetup(name: 'Bot', isBot: true),
+    ]);
+    await tester.pumpWidget(
+      MaterialApp(home: GameScreen(controller: controller)),
+    );
+    await dismissWelcome(tester);
+
+    await tester.tap(find.text('Roll the dice'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('Split'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('End Turn'));
+
+    // The splash queues behind the end-of-turn ceremonies, so step until
+    // it shows rather than guessing its arrival.
+    var found = false;
+    for (var i = 0; i < 60 && !found; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      found = tester.any(find.text("Bot's turn"));
+    }
+    expect(found, isTrue, reason: 'ending a turn should name the bot');
+    // The hand button stays put through a rival's turn - it dims, it does
+    // not vanish.
+    expect(find.byType(CardFanIcon), findsOneWidget);
+
+    await tester.pumpAndSettle();
+    expect(find.text("Bot's turn"), findsNothing);
+    expect(find.text('Your turn'), findsNothing);
+  });
+
+  testWidgets('the secret task line tracks live objective progress',
+      (tester) async {
+    await pumpResumed(tester, fixture(objectiveId: 'forester'));
+
+    // The count alone: two forests of the four wanted.
+    expect(find.text('🎯 2/4 forests'), findsOneWidget);
+  });
+
+  testWidgets('the secret task line marks a completed objective',
+      (tester) async {
+    await pumpResumed(tester, fixture(objectiveId: 'centrist'));
+
+    // Hex(0, 0) is the human's, so the objective is already met.
+    expect(find.text('🎯 1/1 center tile ✓'), findsOneWidget);
+  });
+
+  testWidgets('the shop glows only when a landmark is affordable',
+      (tester) async {
+    // Trade post costs 2 wood + 2 brick; the trade rate of 3 is out of
+    // reach, so only the shop should light up.
+    await pumpResumed(
+      tester,
+      fixture(
+        resources: const {Resource.wood: 2, Resource.brick: 2},
+        landmarkOffer: const ['trade_post'],
+      ),
+    );
+    expect(find.byKey(const ValueKey('shop-glow')), findsOneWidget);
+    expect(find.byKey(const ValueKey('trade-glow')), findsNothing);
+
+    // One wood buys nothing: no glow anywhere.
+    await pumpResumed(
+      tester,
+      fixture(
+        resources: const {Resource.wood: 1},
+        landmarkOffer: const ['trade_post'],
+      ),
+    );
+    expect(find.byKey(const ValueKey('shop-glow')), findsNothing);
+    expect(find.byKey(const ValueKey('shop')), findsOneWidget);
+  });
+
+  testWidgets('the game-start card reveal restates the secret task',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final controller = GameController(
+      saveStore: InMemorySaveStore(),
+      botStepDelay: Duration.zero,
+    );
+    await controller.startNewGame(seed: 12, players: const [
+      PlayerSetup(name: 'You', isBot: false),
+      PlayerSetup(name: 'Bot', isBot: true),
+    ]);
+    await tester.pumpWidget(
+      MaterialApp(home: GameScreen(controller: controller)),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.tap(find.text('Start'));
+    await tester.pumpAndSettle();
+
+    final objective =
+        objectiveCatalog[controller.state!.players.first.objectiveId]!;
+    expect(
+      find.text('🎯 Secret task: ${objective.description}'),
+      findsWidgets,
+    );
+
+    // Only the opening reveal carries it: a later fan is plain.
+    await tester.tapAt(const Offset(10, 100));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(CardFanIcon));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Secret task:'), findsNothing);
   });
 }

@@ -18,9 +18,9 @@ abstract final class Rules {
   static const upgradeCost = {Resource.grain: 2, Resource.stone: 1};
   static const banditRemovalCount = 2;
 
-  /// Consecutive zero-income dice activations before the bank pays the
-  /// player one random resource.
-  static const droughtReliefThreshold = 3;
+  /// Rounds between bank giveaways: every player gets one random resource
+  /// at the start of every Nth round.
+  static const giveawayInterval = 3;
 
   /// Seizing a rival hex (board full only): 5 resources, +3 per level
   /// above 1.

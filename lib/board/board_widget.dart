@@ -7,23 +7,27 @@ import 'board_painter.dart';
 class BoardWidget extends StatelessWidget {
   final GameState state;
   final Set<Hex> highlighted;
-  final Set<Hex> upgradeHighlighted;
   final Set<Hex> seizeHighlighted;
   final Hex? selected;
   final void Function(Hex)? onTapHex;
   final void Function(Hex)? onLongPressHex;
   final Hex? hideBanditAt;
 
+  /// Upgrade badges: painted on [humanPlayerId]'s level-1 tiles only.
+  final int? humanPlayerId;
+  final bool upgradeAffordable;
+
   const BoardWidget({
     super.key,
     required this.state,
     this.highlighted = const {},
-    this.upgradeHighlighted = const {},
     this.seizeHighlighted = const {},
     this.selected,
     this.onTapHex,
     this.onLongPressHex,
     this.hideBanditAt,
+    this.humanPlayerId,
+    this.upgradeAffordable = false,
   });
 
   @override
@@ -45,10 +49,11 @@ class BoardWidget extends StatelessWidget {
             painter: BoardPainter(
               state: state,
               highlighted: highlighted,
-              upgradeHighlighted: upgradeHighlighted,
               seizeHighlighted: seizeHighlighted,
               selected: selected,
               hideBanditAt: hideBanditAt,
+              humanPlayerId: humanPlayerId,
+              upgradeAffordable: upgradeAffordable,
             ),
           ),
         );

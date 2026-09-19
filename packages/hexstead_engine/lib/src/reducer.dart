@@ -8,6 +8,7 @@ import 'model/objectives.dart';
 import 'model/player.dart';
 import 'model/terrain.dart';
 import 'model/tile.dart';
+import 'production.dart';
 import 'scoring.dart';
 
 class IllegalActionException implements Exception {
@@ -75,8 +76,7 @@ ApplyResult _chooseActivation(GameState state, ActivationMode mode) {
 
   if (mode == ActivationMode.sum && d1 + d2 == 7) {
     events.add(const NothingProduced());
-    final next = _applyDroughtTracking(state, const {}, events);
-    return ApplyResult(next.copyWith(phase: Phase.awaitingBandit), events);
+    return ApplyResult(state.copyWith(phase: Phase.awaitingBandit), events);
   }
 
   final activated =
@@ -95,7 +95,7 @@ ApplyResult _chooseActivation(GameState state, ActivationMode mode) {
     final hits = activated.where((n) => n == tile.number).length;
     if (hits == 0) continue;
     final resource = tile.terrain.resource!;
-    final count = _productionCount(state, tile, hits);
+    final count = productionFor(state, tile, hits: hits);
     grants.add((
       hex: tile.coord,
       playerId: tile.ownerId!,
@@ -110,54 +110,7 @@ ApplyResult _chooseActivation(GameState state, ActivationMode mode) {
   events.add(grants.isEmpty
       ? const NothingProduced()
       : ResourcesProduced(grants));
-  next = _applyDroughtTracking(
-      next, {for (final g in grants) g.playerId}, events);
   return ApplyResult(next.copyWith(phase: Phase.main), events);
-}
-
-/// Bad-luck insurance: players paid by this activation reset their drought
-/// streak; everyone else increments, and a streak reaching
-/// [Rules.droughtReliefThreshold] pays 1 random resource and resets.
-GameState _applyDroughtTracking(
-    GameState state, Set<int> producers, List<GameEvent> events) {
-  var next = state;
-  for (final player in state.players) {
-    if (producers.contains(player.id)) {
-      next = next.withPlayer(player.id, (p) => p.copyWith(droughtStreak: 0));
-      continue;
-    }
-    final streak = player.droughtStreak + 1;
-    if (streak < Rules.droughtReliefThreshold) {
-      next =
-          next.withPlayer(player.id, (p) => p.copyWith(droughtStreak: streak));
-      continue;
-    }
-    final resource =
-        Resource.values[next.rng.nextInt(Resource.values.length)];
-    next = next.withPlayer(
-      player.id,
-      (p) => p.copyWith(
-        droughtStreak: 0,
-        resources: p.resourcesApplying({resource: 1}),
-      ),
-    );
-    events.add(DroughtRelief(player.id, resource));
-  }
-  return next;
-}
-
-/// Yield for one producing tile, including landmark modifiers.
-int _productionCount(GameState state, Tile tile, int hits) {
-  final owner = state.players[tile.ownerId!];
-  var perHit = tile.level;
-  if (owner.hasLandmark(terrainBoostLandmarks[tile.terrain] ?? '')) {
-    perHit += 1;
-  }
-  var count = hits * perHit;
-  if (owner.hasLandmark('high_roller') && (tile.number ?? 0) >= 9) {
-    count *= 2;
-  }
-  return count;
 }
 
 void _requireBanditAllowed(GameState state, Tile tile) {
@@ -535,7 +488,7 @@ ApplyResult _playCard(GameState state, PlayCard action) {
           continue;
         }
         final resource = tile.terrain.resource!;
-        final count = _productionCount(next, tile, 1);
+        final count = productionFor(next, tile);
         grants.add((
           hex: tile.coord,
           playerId: player.id,
@@ -623,8 +576,28 @@ ApplyResult _endTurn(GameState state) {
   if (wrapped) {
     events.add(RoundAdvanced(next.round));
     next = _dealRefill(next, events);
+    if ((next.round - 1) % Rules.giveawayInterval == 0 && next.round > 1) {
+      next = _applyGiveaway(next, events);
+    }
   }
   return ApplyResult(next, events);
+}
+
+/// The bank's periodic stimulus: one random resource per player, in seat
+/// order, so a cold streak of dice never leaves anyone stranded.
+GameState _applyGiveaway(GameState state, List<GameEvent> events) {
+  var next = state;
+  final grants = <({int playerId, Resource resource})>[];
+  for (final player in state.players) {
+    final resource = Resource.values[next.rng.nextInt(Resource.values.length)];
+    next = next.withPlayer(
+      player.id,
+      (p) => p.copyWith(resources: p.resourcesApplying({resource: 1})),
+    );
+    grants.add((playerId: player.id, resource: resource));
+  }
+  events.add(ResourceGiveaway(next.round, grants));
+  return next;
 }
 
 /// Rounds 5 and 10 hand every player a card. The deck is finite, so players

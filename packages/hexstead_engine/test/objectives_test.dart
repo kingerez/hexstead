@@ -98,6 +98,82 @@ void main() {
     });
   });
 
+  group('progress', () {
+    test('every objective reports a positive target and a short label', () {
+      final s = board([(const Hex(0, 0), TerrainType.forest, 5, 0, 1)]);
+      for (final o in objectiveCatalog.values) {
+        final (current, target) = o.progress(s, 0);
+        expect(target, greaterThan(0), reason: o.id);
+        expect(current, greaterThanOrEqualTo(0), reason: o.id);
+        expect(o.shortLabel, isNotEmpty, reason: o.id);
+      }
+    });
+
+    test('sprawl progress tracks tiles changing hands', () {
+      final spec = objectiveCatalog['sprawl']!;
+      final spread = [
+        for (var q = 0; q < 8; q++) (Hex(q, 0), TerrainType.forest, 5, 0, 1),
+      ];
+      expect(spec.progress(board(spread.sublist(0, 4)), 0), (4, 8));
+      expect(spec.progress(board(spread.sublist(0, 4)), 1), (0, 8));
+      // Hand two of them to p1: both sides move.
+      final split = [
+        for (final (i, t) in spread.indexed)
+          (t.$1, t.$2, t.$3, i < 6 ? 0 : 1, t.$5),
+      ];
+      expect(spec.progress(board(split), 0), (6, 8));
+      expect(spec.progress(board(split), 1), (2, 8));
+      expect(spec.isComplete(board(spread), 0), isTrue);
+      expect(spec.progress(board(spread), 0), (8, 8));
+    });
+
+    test('centrist progress flips with the center tile owner', () {
+      final spec = objectiveCatalog['centrist']!;
+      final mine = board([(const Hex(0, 0), TerrainType.desert, null, 0, 1)]);
+      expect(spec.progress(mine, 0), (1, 1));
+      expect(spec.progress(mine, 1), (0, 1));
+      final unowned =
+          board([(const Hex(0, 0), TerrainType.desert, null, null, 0)]);
+      expect(spec.progress(unowned, 0), (0, 1));
+    });
+
+    test('straight_line progress counts the longest run, capped at 3', () {
+      final spec = objectiveCatalog['straight_line']!;
+      expect(
+          spec.progress(
+              board([(const Hex(0, 0), TerrainType.field, 5, 0, 1)]), 0),
+          (1, 3));
+      expect(
+          spec.progress(
+              board([
+                (const Hex(0, 0), TerrainType.field, 5, 0, 1),
+                (const Hex(0, 1), TerrainType.forest, 5, 0, 1),
+              ]),
+              0),
+          (2, 3));
+      expect(
+          spec.progress(
+              board([
+                (const Hex(0, -1), TerrainType.field, 5, 0, 1),
+                (const Hex(0, 0), TerrainType.forest, 5, 0, 1),
+                (const Hex(0, 1), TerrainType.hill, 5, 0, 1),
+                (const Hex(0, 2), TerrainType.hill, 5, 0, 1),
+              ]),
+              0),
+          (3, 3));
+    });
+
+    test('isComplete agrees with progress across the catalog', () {
+      final s = board([
+        for (var q = 0; q < 4; q++) (Hex(q, 0), TerrainType.forest, 5, 0, 1),
+      ]);
+      for (final o in objectiveCatalog.values) {
+        final (current, target) = o.progress(s, 0);
+        expect(o.isComplete(s, 0), current >= target, reason: o.id);
+      }
+    });
+  });
+
   group('endgame integration', () {
     test('completed objectives add their bonus to final scores', () {
       // p0 has 4 forests (forester complete, +4); p1 has 2 camps (mayor not)
