@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
 
+import 'chrome.dart';
+
 /// Bank trade in two steps: pick which resource to sell (only ones you hold
 /// enough of are shown), then pick what to buy with it.
 class TradeOverlay extends StatefulWidget {
@@ -60,12 +62,7 @@ class _TradeOverlayState extends State<TradeOverlay> {
               child: Container(
                 width: 340,
                 padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF4EAD4),
-                  borderRadius: BorderRadius.circular(18),
-                  border:
-                      Border.all(color: const Color(0xFF8A6F4D), width: 2),
-                ),
+                decoration: parchmentPanel(radius: 18),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,

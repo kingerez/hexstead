@@ -52,6 +52,11 @@ class ArtStore {
 
   bool has(String path) => _available.contains(path);
 
+  /// ImageProvider for a bundled asset, or null when it is not present -
+  /// lets a BoxDecoration take the art without a widget in between.
+  ImageProvider? provider(String path) =>
+      has(path) ? AssetImage(path) : null;
+
   /// Decoded tile sprite for the painter, or null to use the placeholder.
   ui.Image? tileImage(TerrainType terrain) => _decoded[_tilePaths[terrain]];
 

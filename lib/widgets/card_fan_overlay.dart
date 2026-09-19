@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
 
 import '../art/art_store.dart';
+import 'chrome.dart';
 
 /// Tablets (>= 600dp shortest side) get larger cards; 1.4 keeps a 5-card
 /// fan inside an iPad portrait width.
@@ -236,11 +237,8 @@ class ActionCardFace extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 3),
       padding: const EdgeInsets.all(10),
       clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF4EAD4),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF8A6F4D), width: 2),
-        boxShadow: const [
+      decoration: parchmentPanel(
+        shadows: const [
           BoxShadow(
               color: Colors.black45, blurRadius: 10, offset: Offset(0, 4)),
         ],

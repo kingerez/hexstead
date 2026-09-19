@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
 
 import '../art/art_store.dart';
+import 'chrome.dart';
 
 /// The landmark shop as a 2x2 spread of art cards. Tap outside to close;
 /// affordable landmarks carry a live Buy button.
@@ -114,11 +115,9 @@ class ShopOverlay extends StatelessWidget {
       width: 172,
       height: 196,
       clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF4EAD4),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF8A6F4D), width: 2),
-        boxShadow: const [
+      decoration: parchmentPanel(
+        radius: 14,
+        shadows: const [
           BoxShadow(color: Colors.black45, blurRadius: 10, offset: Offset(0, 4)),
         ],
       ),
