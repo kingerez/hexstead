@@ -52,6 +52,7 @@ class _BotCardOverlayState extends State<BotCardOverlay>
       animation: _controller,
       builder: (context, _) {
         final t = _controller.value;
+        final cardBlowUp = 1.9 * cardScaleOf(context);
         // Pop in with a little overshoot, hold, then shrink away.
         final double scale;
         final double opacity;
@@ -83,7 +84,7 @@ class _BotCardOverlayState extends State<BotCardOverlay>
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 6),
+                            horizontal: 18, vertical: 8),
                         decoration: BoxDecoration(
                           color: widget.playerColor,
                           borderRadius: BorderRadius.circular(20),
@@ -98,14 +99,21 @@ class _BotCardOverlayState extends State<BotCardOverlay>
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w800,
-                            fontSize: 15,
+                            fontSize: 17,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 14),
-                      Transform.scale(
-                        scale: 1.25 * cardScaleOf(context),
-                        child: ActionCardFace(cardId: widget.cardId),
+                      const SizedBox(height: 16),
+                      // A single card alone on screen: blow it up well past
+                      // hand size so the rules text is not a cramped column.
+                      // Sized rather than Transform.scale'd, so the column
+                      // still centers on the card's real painted bounds.
+                      SizedBox(
+                        width: ActionCardFace.width * cardBlowUp,
+                        height: ActionCardFace.height * cardBlowUp,
+                        child: FittedBox(
+                          child: ActionCardFace(cardId: widget.cardId),
+                        ),
                       ),
                     ],
                   ),
