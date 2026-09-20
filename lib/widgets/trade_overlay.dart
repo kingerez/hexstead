@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
 
 import 'chrome.dart';
+import 'resource_icon.dart';
 
 /// Bank trade in two steps: pick which resource to sell (only ones you hold
 /// enough of are shown), then pick what to buy with it.
@@ -27,13 +28,6 @@ class TradeOverlay extends StatefulWidget {
 
 class _TradeOverlayState extends State<TradeOverlay> {
   Resource? _give;
-
-  static const _resourceEmoji = {
-    Resource.wood: '🪵',
-    Resource.grain: '🌾',
-    Resource.brick: '🧱',
-    Resource.stone: '🪨',
-  };
 
   @override
   Widget build(BuildContext context) {
@@ -105,8 +99,12 @@ class _TradeOverlayState extends State<TradeOverlay> {
                       ),
                       if (_give != null) ...[
                         const SizedBox(height: 16),
-                        Text(
-                          'Sell $rate ${_resourceEmoji[_give]} to buy:',
+                        Text.rich(
+                          TextSpan(children: [
+                            TextSpan(text: 'Sell $rate '),
+                            resourceSpan(_give!, 15),
+                            const TextSpan(text: ' to buy:'),
+                          ]),
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
@@ -125,8 +123,11 @@ class _TradeOverlayState extends State<TradeOverlay> {
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 14, vertical: 10),
                                   ),
-                                  child: Text(
-                                    '${_resourceEmoji[t.get]} +1',
+                                  child: Text.rich(
+                                    TextSpan(children: [
+                                      resourceSpan(t.get, 16),
+                                      const TextSpan(text: ' +1'),
+                                    ]),
                                     style: const TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.w700),
@@ -155,8 +156,11 @@ class _TradeOverlayState extends State<TradeOverlay> {
       selectedColor: const Color(0xFF9A6B1F),
       backgroundColor: const Color(0xFFE7D9B8),
       side: const BorderSide(color: Color(0xFF8A6F4D)),
-      label: Text(
-        '${_resourceEmoji[give]}  $count',
+      label: Text.rich(
+        TextSpan(children: [
+          resourceSpan(give, 16),
+          TextSpan(text: '  $count'),
+        ]),
         style: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w700,

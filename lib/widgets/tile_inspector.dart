@@ -5,6 +5,7 @@ import '../art/art_store.dart';
 import '../board/board_geometry.dart';
 import '../board/board_painter.dart';
 import 'chrome.dart';
+import 'resource_icon.dart';
 
 /// Persistent detail panel under the board: what the selected hex is, what
 /// it yields, how often it pays, and the only place upgrades are bought.
@@ -40,17 +41,16 @@ class TileInspector extends StatelessWidget {
     TerrainType.desert: 'Desert',
   };
 
-  static const _resourceEmoji = {
-    Resource.wood: '🪵',
-    Resource.grain: '🌾',
-    Resource.brick: '🧱',
-    Resource.stone: '🪨',
-  };
-
   static const _lineStyle =
       TextStyle(color: Colors.white, fontSize: 12.5, height: 1.2);
   static const _dimStyle =
       TextStyle(color: Colors.white70, fontSize: 12.5, height: 1.2);
+
+  PlayerState get _human =>
+      state.players.firstWhere((p) => p.id == humanPlayerId);
+
+  static List<InlineSpan> _costSpans(Map<Resource, int> cost) =>
+      costSpans(cost, _lineStyle.fontSize!);
 
   @override
   Widget build(BuildContext context) {
@@ -128,12 +128,20 @@ class TileInspector extends StatelessWidget {
               style: _dimStyle,
             ),
           ),
-        _line(
-          owned
-              ? 'Owner: ${t.ownerId == humanPlayerId ? 'You' : state.players[t.ownerId!].name}'
-              : 'Unclaimed',
-          style: _dimStyle,
-        ),
+        if (owned)
+          _line(
+            'Owner: ${t.ownerId == humanPlayerId ? 'You' : state.players[t.ownerId!].name}',
+            style: _dimStyle,
+          )
+        else
+          _richLine(
+            [
+              const TextSpan(text: 'Unclaimed · pay '),
+              ..._costSpans(Rules.effectiveClaimCost(_human)),
+              const TextSpan(text: ' to claim'),
+            ],
+            style: _dimStyle,
+          ),
         if (status != null) _line(status, style: _dimStyle),
       ],
     );
@@ -149,6 +157,15 @@ class TileInspector extends StatelessWidget {
         style: style ?? _lineStyle,
       );
 
+  /// Same line, with inline icons among the words.
+  Widget _richLine(List<InlineSpan> spans, {TextStyle? style}) => Text.rich(
+        TextSpan(children: spans),
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+        style: style ?? _lineStyle,
+      );
+
   Widget _upgradeBlock(Tile t) {
     if (t.level >= 2) {
       return const Text(
@@ -156,13 +173,13 @@ class TileInspector extends StatelessWidget {
         style: TextStyle(color: Colors.white54, fontSize: 12.5),
       );
     }
-    final cost = Rules.upgradeCost.entries
-        .map((e) => '${_resourceEmoji[e.key]}${e.value}')
-        .join(' ');
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(cost, style: _dimStyle),
+        Text.rich(
+          TextSpan(children: _costSpans(Rules.upgradeCost)),
+          style: _dimStyle,
+        ),
         const SizedBox(height: 4),
         FilledButton(
           onPressed: upgradeEnabled ? onUpgrade : null,

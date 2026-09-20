@@ -5,6 +5,7 @@ import 'package:hexstead_engine/hexstead_engine.dart';
 
 import '../board/board_geometry.dart';
 import '../board/board_painter.dart';
+import 'resource_icon.dart';
 
 /// After an activation, floats "+N icon" chips up from every producing hex
 /// in the producer's color - or a "no hexes matched" notice when the roll
@@ -49,12 +50,8 @@ class _ProductionOverlayState extends State<ProductionOverlay>
     duration: Duration(milliseconds: _totalMs),
   );
 
-  static const _resourceEmoji = {
-    Resource.wood: '🪵',
-    Resource.grain: '🌾',
-    Resource.brick: '🧱',
-    Resource.stone: '🪨',
-  };
+  /// Chips render at this size, icons included.
+  static const _chipFontSize = 15.0;
 
   @override
   void initState() {
@@ -146,11 +143,14 @@ class _ProductionOverlayState extends State<ProductionOverlay>
           BoxShadow(color: Colors.black45, blurRadius: 6),
         ],
       ),
-      child: Text(
-        '🎁 $name +1 ${_resourceEmoji[bonus.resource]}',
+      child: Text.rich(
+        TextSpan(children: [
+          TextSpan(text: '🎁 $name +1 '),
+          resourceSpan(bonus.resource, _chipFontSize),
+        ]),
         style: const TextStyle(
           color: Colors.white,
-          fontSize: 15,
+          fontSize: _chipFontSize,
           fontWeight: FontWeight.w800,
         ),
       ),
@@ -176,11 +176,14 @@ class _ProductionOverlayState extends State<ProductionOverlay>
               BoxShadow(color: Colors.black45, blurRadius: 6),
             ],
           ),
-          child: Text(
-            '+${grant.count} ${_resourceEmoji[grant.resource]}',
+          child: Text.rich(
+            TextSpan(children: [
+              TextSpan(text: '+${grant.count} '),
+              resourceSpan(grant.resource, _chipFontSize),
+            ]),
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 15,
+              fontSize: _chipFontSize,
               fontWeight: FontWeight.w800,
             ),
           ),

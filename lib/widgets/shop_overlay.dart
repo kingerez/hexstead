@@ -3,6 +3,7 @@ import 'package:hexstead_engine/hexstead_engine.dart';
 
 import '../art/art_store.dart';
 import 'chrome.dart';
+import 'resource_icon.dart';
 
 /// The landmark shop as a 2x2 spread of art cards. Tap outside to close;
 /// affordable landmarks carry a live Buy button.
@@ -34,13 +35,6 @@ class ShopOverlay extends StatelessWidget {
     'market_hall': '🏪',
     'watchtower': '🗼',
     'keep': '🏰',
-  };
-
-  static const _resourceEmoji = {
-    Resource.wood: '🪵',
-    Resource.grain: '🌾',
-    Resource.brick: '🧱',
-    Resource.stone: '🪨',
   };
 
   @override
@@ -208,10 +202,11 @@ class ShopOverlay extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        spec.cost.entries
-                            .map((e) => '${e.value} ${_resourceEmoji[e.key]}')
-                            .join('   '),
+                      Text.rich(
+                        TextSpan(
+                          children: costSpans(spec.cost, 13,
+                              countFirst: true, separator: '   '),
+                        ),
                         maxLines: 1,
                         style: const TextStyle(
                             fontSize: 13,

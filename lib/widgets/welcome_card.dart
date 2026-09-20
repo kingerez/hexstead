@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
 
+import 'resource_icon.dart';
+
 /// Game-start overlay: dims the fresh board and briefs the player - the win
 /// conditions and their secret goal - then hands off via [onStart].
 class WelcomeOverlay extends StatelessWidget {
@@ -83,7 +85,7 @@ class WelcomeOverlay extends StatelessWidget {
               top: -34,
               child: Opacity(
                 opacity: 0.15,
-                child: Text('🎯', style: TextStyle(fontSize: 130)),
+                child: TaskIcon(size: 130),
               ),
             ),
             Column(
