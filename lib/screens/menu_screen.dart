@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../art/art_store.dart';
+import '../audio/sound_store.dart';
 import '../state/game_controller.dart';
 import 'game_screen.dart';
 import 'setup_screen.dart';
@@ -36,7 +37,17 @@ class _MenuScreenState extends State<MenuScreen> {
     });
   }
 
+  /// Browsers refuse to start audio before a user gesture, so the menu theme
+  /// rides the first button tap rather than the first build. The trips back to
+  /// the menu restart it from their own side (game over screen, quit to menu):
+  /// a pushReplacement down the chain completes the awaited push here early, so
+  /// the return leg is not a reliable hook.
+  void _menuMusic() {
+    SoundStore.instance.startMusic(MusicTrack.menu);
+  }
+
   Future<void> _newGame() async {
+    _menuMusic();
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => SetupScreen(controller: widget.controller),
@@ -46,6 +57,7 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   Future<void> _continue() async {
+    _menuMusic();
     final navigator = Navigator.of(context);
     final ok = await widget.controller.resume();
     if (!ok) {

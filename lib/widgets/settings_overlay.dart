@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-/// In-game settings card: sound toggles (stored now, audio wired later)
-/// and Home, which quits to the menu after confirmation. Progress is
-/// autosaved, so quitting never loses a game.
+import '../audio/sound_store.dart';
+
+/// In-game settings card: the music and sound toggles (SoundStore owns both
+/// the live state and the stored prefs) and Home, which quits to the menu
+/// after confirmation. Progress is autosaved, so quitting never loses a game.
 class SettingsOverlay extends StatefulWidget {
   final VoidCallback onClose;
   final VoidCallback onQuitToMenu;
@@ -19,23 +20,21 @@ class SettingsOverlay extends StatefulWidget {
 }
 
 class _SettingsOverlayState extends State<SettingsOverlay> {
-  bool _music = true;
-  bool _sounds = true;
+  bool _music = SoundStore.instance.musicEnabled;
+  bool _sounds = SoundStore.instance.sfxEnabled;
 
   @override
   void initState() {
     super.initState();
-    SharedPreferences.getInstance().then((prefs) {
+    // The store is loaded at startup; this only matters when the overlay is
+    // built without a full app boot behind it.
+    SoundStore.instance.load().then((_) {
       if (!mounted) return;
       setState(() {
-        _music = prefs.getBool('music_on') ?? true;
-        _sounds = prefs.getBool('sounds_on') ?? true;
+        _music = SoundStore.instance.musicEnabled;
+        _sounds = SoundStore.instance.sfxEnabled;
       });
     });
-  }
-
-  void _set(String key, bool value) {
-    SharedPreferences.getInstance().then((p) => p.setBool(key, value));
   }
 
   Future<void> _confirmQuit() async {
@@ -104,11 +103,11 @@ class _SettingsOverlayState extends State<SettingsOverlay> {
                     const SizedBox(height: 8),
                     _toggle('Music', _music, (v) {
                       setState(() => _music = v);
-                      _set('music_on', v);
+                      SoundStore.instance.setMusicEnabled(v);
                     }),
                     _toggle('Sounds', _sounds, (v) {
                       setState(() => _sounds = v);
-                      _set('sounds_on', v);
+                      SoundStore.instance.setSfxEnabled(v);
                     }),
                     const SizedBox(height: 12),
                     FilledButton.icon(

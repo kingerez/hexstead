@@ -7,6 +7,7 @@ environment:
   sdk: ^3.12.2
 
 dependencies:
+  audioplayers: ^6.8.1
   flutter:
     sdk: flutter
   hexstead_engine:
@@ -28,3 +29,4 @@ flutter:
     - assets/images/cards/
     - assets/images/landmarks/
     - assets/images/ui/
+    - assets/audio/

@@ -45,5 +45,8 @@ app.*.map.json
 /android/app/release
 ios/build/
 art_inbox/
+# Raw audio drops are local; the folder itself stays so the script has a home.
+audio_inbox/*
+!audio_inbox/.gitkeep
 packages/*/build/
 packages/*/.dart_tool/
