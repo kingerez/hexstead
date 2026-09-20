@@ -37,15 +37,16 @@ class ScoreEntry {
 }
 
 /// Polytopia-style reward for harder setups: each bot adds to the multiplier
-/// by difficulty (easy .25, medium .5, hard .75).
-double difficultyMultiplier(List<PlayerState> players) {
-  var total = 1.0;
+/// by difficulty (easy +1, medium +2, hard +3), so it is always a whole
+/// number - ×2 for a lone easy bot up to ×10 for three cruel ones.
+int difficultyMultiplier(List<PlayerState> players) {
+  var total = 1;
   for (final p in players) {
     if (!p.isBot) continue;
     total += switch (p.difficulty) {
-      BotDifficulty.easy => 0.25,
-      BotDifficulty.medium => 0.5,
-      BotDifficulty.hard => 0.75,
+      BotDifficulty.easy => 1,
+      BotDifficulty.medium => 2,
+      BotDifficulty.hard => 3,
     };
   }
   return total;
