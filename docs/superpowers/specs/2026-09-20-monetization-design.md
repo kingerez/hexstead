@@ -34,10 +34,15 @@ revenue floor from free players.
   cannot sell IAP to the public. One-time admin: Paid Apps agreement and
   banking/tax setup in App Store Connect, IAP product created in ASC.
 - Web (GitHub Pages): permanently free tier. No ad SDK, no IAP code in the
-  bundle. Locked setup options render with a lock and a "Get the full game on
-  iOS" link. The web build is the acquisition funnel.
-- Android: out of scope for now. The entitlement layer stays platform-agnostic
-  so Android can be added without redesign.
+  bundle. Locked setup options render with a lock and a "Get the full game"
+  link to the App Store and Play Store. The web build is the acquisition
+  funnel.
+- Android: full model (IAP + ads), same as iOS. The `in_app_purchase` plugin
+  covers Google Play Billing with the same product id `hexstead.full`, and
+  `google_mobile_ads` covers AdMob on Android. One-time admin: Google Play
+  Console account, merchant profile for payments, IAP product created in Play
+  Console, and a release pipeline (none exists today; current pipelines are
+  TestFlight and Pages only).
 
 ## Components
 
@@ -68,7 +73,8 @@ Singleton in the same style as `ArtStore` and `SoundStore`.
   Buy button, Restore button.
 - Reachable from: tapping any locked chip, and an entry in settings.
 - Settings also gets a "Restore purchases" entry (App Store requirement).
-- On web, the same surface becomes the "Get the full game on iOS" card.
+- On web, the same surface becomes the "Get the full game" card with App
+  Store and Play Store links.
 
 ### Ads
 
@@ -80,9 +86,10 @@ Singleton in the same style as `ArtStore` and `SoundStore`.
 - Wrapped in a small ad service with a no-op implementation for web and for
   unlocked users, so the ad SDK is never loaded where it is not needed
   (conditional imports keep it out of the web bundle entirely).
-- Non-personalized ads only at launch: skips the App Tracking Transparency
-  prompt and keeps the privacy label short. Personalized ads are a possible
-  later optimization, not part of this design.
+- Non-personalized ads only at launch: on iOS this skips the App Tracking
+  Transparency prompt and keeps the privacy label short; on Android it keeps
+  the Play data safety form minimal. Personalized ads are a possible later
+  optimization, not part of this design.
 - AdMob test ad unit ids until release.
 
 ## Error handling
@@ -99,12 +106,14 @@ Singleton in the same style as `ArtStore` and `SoundStore`.
   entitlement cache behavior (offline fallback, store-wins refresh), ad
   eligibility rules (tutorial and first game exempt, unlocked exempt).
 - Manual/integration: StoreKit Testing configuration in Xcode for purchase,
-  cancel, and restore flows in the simulator; AdMob test units for ad display.
+  cancel, and restore flows in the simulator; on Android, Play Billing with
+  license testers on an internal test track; AdMob test units for ad display
+  on both platforms.
 - Web build check: no ad or IAP plugin code in the bundle, locked chips show
-  the iOS link, game fully playable in the free tier.
+  the store links, game fully playable in the free tier.
 
 ## Out of scope
 
-- Android release, personalized ads / ATT, additional SKUs (cosmetic packs,
-  tip jar), promo codes, server-side receipt validation (StoreKit local
-  verification is sufficient at this scale).
+- Personalized ads / ATT, additional SKUs (cosmetic packs, tip jar), promo
+  codes, server-side receipt validation (local verification on both stores is
+  sufficient at this scale).
