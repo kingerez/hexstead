@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
 
 import '../art/art_store.dart';
+import '../audio/sound_store.dart';
 import '../state/game_controller.dart';
 import '../state/high_scores.dart';
 import '../widgets/chrome.dart';
@@ -23,6 +24,7 @@ class _SetupScreenState extends State<SetupScreen> {
   static const _botNames = ['Rosalind', 'Bertram', 'Wilhelmina'];
 
   Future<void> _start() async {
+    SoundStore.instance.playSfx(Sfx.uiTap);
     final players = [
       const PlayerSetup(name: 'You', isBot: false),
       for (var i = 0; i < _botCount; i++)
@@ -202,7 +204,10 @@ class _SetupScreenState extends State<SetupScreen> {
   }) {
     return ChoiceChip(
       selected: selected,
-      onSelected: (_) => onSelected(),
+      onSelected: (_) {
+        SoundStore.instance.playSfx(Sfx.uiTap);
+        onSelected();
+      },
       showCheckmark: false,
       selectedColor: const Color(0xFF9A6B1F),
       backgroundColor: const Color(0xFFE7D9B8),

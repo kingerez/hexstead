@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
 
+import '../audio/sound_store.dart';
 import 'chrome.dart';
 import 'resource_icon.dart';
 
@@ -118,7 +119,10 @@ class _TradeOverlayState extends State<TradeOverlay> {
                             for (final t in widget.legalTrades)
                               if (t.give == _give)
                                 FilledButton.tonal(
-                                  onPressed: () => widget.onTrade(t),
+                                  onPressed: () {
+                                    SoundStore.instance.playSfx(Sfx.uiTap);
+                                    widget.onTrade(t);
+                                  },
                                   style: FilledButton.styleFrom(
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 14, vertical: 10),
@@ -151,7 +155,10 @@ class _TradeOverlayState extends State<TradeOverlay> {
     final selected = _give == give;
     return ChoiceChip(
       selected: selected,
-      onSelected: (_) => setState(() => _give = selected ? null : give),
+      onSelected: (_) {
+        SoundStore.instance.playSfx(Sfx.uiTap);
+        setState(() => _give = selected ? null : give);
+      },
       showCheckmark: false,
       selectedColor: const Color(0xFF9A6B1F),
       backgroundColor: const Color(0xFFE7D9B8),

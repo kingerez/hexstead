@@ -13,6 +13,11 @@ class GameController extends ChangeNotifier {
   /// Pause between visible bot steps; zero in tests.
   final Duration botStepDelay;
 
+  /// Replaces [SmartBot] as the source of bot moves. The scripted tutorial
+  /// feeds its rehearsed opponent this way; returning null stops the bot
+  /// loop where it stands, leaving the game parked mid-turn.
+  final GameAction? Function(GameState state)? botBrainOverride;
+
   GameState? _state;
   List<GameEvent> lastEvents = const [];
   bool _drivingBots = false;
@@ -25,6 +30,7 @@ class GameController extends ChangeNotifier {
   GameController({
     required this.saveStore,
     this.botStepDelay = const Duration(milliseconds: 500),
+    this.botBrainOverride,
   });
 
   GameState? get state => _state;
@@ -46,6 +52,16 @@ class GameController extends ChangeNotifier {
       targetVp: targetVp,
       roundCap: roundCap,
     );
+    lastEvents = const [];
+    await _persist();
+    notifyListeners();
+    await _driveBots();
+  }
+
+  /// Starts from a hand-authored state instead of a generated one - the
+  /// scripted tutorial's way in.
+  Future<void> startFromState(GameState state) async {
+    _state = state;
     lastEvents = const [];
     await _persist();
     notifyListeners();
@@ -96,7 +112,10 @@ class GameController extends ChangeNotifier {
         if (botStepDelay > Duration.zero) {
           await Future<void>.delayed(botStepDelay);
         }
-        final action = SmartBot.chooseAction(_state!);
+        final action = botBrainOverride != null
+            ? botBrainOverride!(_state!)
+            : SmartBot.chooseAction(_state!);
+        if (action == null) break;
         final result = apply(_state!, action);
         _state = result.state;
         lastEvents = result.events;

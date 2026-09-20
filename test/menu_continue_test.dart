@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hexstead/main.dart';
 import 'package:hexstead/screens/menu_screen.dart';
 import 'package:hexstead/state/game_controller.dart';
 import 'package:hexstead/state/persistence.dart';
@@ -44,6 +45,33 @@ void main() {
     // Game over clears the autosave while the menu route is still alive.
     await store.clear();
     await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+    expect(find.text('Continue'), findsNothing);
+  });
+
+  testWidgets('Continue is re-decided when the menu comes back into view',
+      (tester) async {
+    final store = InMemorySaveStore()..saved = midGameSave();
+    final controller =
+        GameController(saveStore: store, botStepDelay: Duration.zero);
+
+    await tester.pumpWidget(MaterialApp(
+      navigatorObservers: [routeObserver],
+      home: MenuScreen(controller: controller),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Continue'), findsOneWidget);
+
+    // Stands in for the game: a route over the menu, and the autosave cleared
+    // while it is up - which is what reaching game over does.
+    final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+    navigator.push(MaterialPageRoute(
+      builder: (_) => const Scaffold(body: Text('the game')),
+    ));
+    await tester.pumpAndSettle();
+    await store.clear();
+
+    navigator.pop();
     await tester.pumpAndSettle();
     expect(find.text('Continue'), findsNothing);
   });

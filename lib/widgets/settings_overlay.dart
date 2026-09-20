@@ -9,10 +9,17 @@ class SettingsOverlay extends StatefulWidget {
   final VoidCallback onClose;
   final VoidCallback onQuitToMenu;
 
+  /// Wording for the quit confirmation. Null keeps the normal game's copy;
+  /// the tutorial passes its own, where there is no progress to save.
+  final String? quitTitle;
+  final String? quitMessage;
+
   const SettingsOverlay({
     super.key,
     required this.onClose,
     required this.onQuitToMenu,
+    this.quitTitle,
+    this.quitMessage,
   });
 
   @override
@@ -41,8 +48,8 @@ class _SettingsOverlayState extends State<SettingsOverlay> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Leave the game?'),
-        content: const Text(
+        title: Text(widget.quitTitle ?? 'Leave the game?'),
+        content: Text(widget.quitMessage ??
             'Your progress is saved - you can continue from the menu.'),
         actions: [
           TextButton(

@@ -2,10 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
 
 import 'dice_roll_overlay.dart';
+import 'option_picker_dialog.dart';
 
 /// Omen card UI: both dice side by side with up/down arrows. One nudge
 /// total - picking an arrow previews it, picking another moves the nudge,
 /// Done commits. Returns the chosen PlayCard, or null if dismissed.
+///
+/// Built as the *contents* of a parchment dialog, not a dialog of its own:
+/// hand it to [showParchmentDialog] and it wears the same scrim, panel and
+/// scale-in as the option picker and the confirmations.
 class AdjustDieDialog extends StatefulWidget {
   final int d1;
   final int d2;
@@ -48,47 +53,69 @@ class _AdjustDieDialogState extends State<AdjustDieDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Adjust a die'),
-      content: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _dieColumn(0),
-          const SizedBox(width: 28),
-          _dieColumn(1),
-        ],
-      ),
-      actions: [
-        FilledButton(
-          onPressed: _selected == null
-              ? null
-              : () => Navigator.pop(context, _selected),
-          child: const Text('Done'),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        parchmentTitle('Adjust a die'),
+        const SizedBox(height: 12),
+        const Text(
+          'Nudge one die up or down by 1.',
+          style: TextStyle(fontSize: 14, height: 1.3, color: parchmentInk),
+        ),
+        const SizedBox(height: 14),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _dieColumn(0),
+            const SizedBox(width: 16),
+            _dieColumn(1),
+          ],
+        ),
+        const SizedBox(height: 18),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              style: TextButton.styleFrom(foregroundColor: parchmentWood),
+              child: const Text('Cancel'),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              onPressed: _selected == null
+                  ? null
+                  : () => Navigator.pop(context, _selected),
+              child: const Text('Done'),
+            ),
+          ],
         ),
       ],
     );
   }
 
+  /// One die on its own inset panel, the way the picker seats its rows,
+  /// with the arrows that may move it above and below.
   Widget _dieColumn(int dieIndex) {
     final adjusted = _selected?.dieIndex == dieIndex;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _arrow(dieIndex, 1, Icons.arrow_drop_up),
-        Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: adjusted ? Colors.amber : Colors.transparent,
-              width: 3,
-            ),
-          ),
-          child: MiniDie(_faceOf(dieIndex), size: 56),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: parchmentInset,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: adjusted ? parchmentAccent : parchmentWood,
+          width: adjusted ? 2.5 : 1,
         ),
-        _arrow(dieIndex, -1, Icons.arrow_drop_down),
-      ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _arrow(dieIndex, 1, Icons.arrow_drop_up),
+          MiniDie(_faceOf(dieIndex), size: 52),
+          _arrow(dieIndex, -1, Icons.arrow_drop_down),
+        ],
+      ),
     );
   }
 
@@ -97,10 +124,11 @@ class _AdjustDieDialogState extends State<AdjustDieDialog> {
     final enabled = _optionFor(dieIndex, delta) != null;
     return IconButton(
       onPressed: enabled ? () => _tapArrow(dieIndex, delta) : null,
-      icon: Icon(icon, size: 40),
-      color: enabled ? Colors.amber : Colors.white24,
+      icon: Icon(icon, size: 38),
+      color: parchmentAccent,
+      disabledColor: parchmentWood.withValues(alpha: 0.35),
       padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(minWidth: 48, minHeight: 36),
+      constraints: const BoxConstraints(minWidth: 48, minHeight: 34),
     );
   }
 }

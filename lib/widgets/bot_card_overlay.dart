@@ -104,16 +104,14 @@ class _BotCardOverlayState extends State<BotCardOverlay>
                         ),
                       ),
                       const SizedBox(height: 16),
-                      // A single card alone on screen: blow it up well past
-                      // hand size so the rules text is not a cramped column.
-                      // Sized rather than Transform.scale'd, so the column
-                      // still centers on the card's real painted bounds.
-                      SizedBox(
-                        width: ActionCardFace.width * cardBlowUp,
-                        height: ActionCardFace.height * cardBlowUp,
-                        child: FittedBox(
-                          child: ActionCardFace(cardId: widget.cardId),
-                        ),
+                      // A single card alone on screen: blow its box up well
+                      // past hand size so the rules text has a roomy column
+                      // to sit in. The face scales its own layout rather than
+                      // being fitted or Transform.scale'd, so the type stays
+                      // near hand size instead of being magnified with it.
+                      ActionCardFace(
+                        cardId: widget.cardId,
+                        layoutScale: cardBlowUp,
                       ),
                     ],
                   ),

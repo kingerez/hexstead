@@ -37,7 +37,8 @@ TARGETS = {
     "music_game": MUSIC_LUFS,
     **{f"sfx_{s}": SFX_LUFS
        for s in ["dice_roll", "card_play", "claim", "upgrade", "production",
-                 "bandit", "match_point", "victory", "defeat"]},
+                 "bandit", "match_point", "victory", "defeat", "ui_tap",
+                 "tile_tap"]},
 }
 
 HAVE_FFMPEG = shutil.which("ffmpeg") is not None

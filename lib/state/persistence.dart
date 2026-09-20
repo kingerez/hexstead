@@ -15,6 +15,20 @@ abstract class SaveStore {
 /// available there), an atomic file on mobile/desktop.
 SaveStore createSaveStore() => kIsWeb ? PrefsSaveStore() : FileSaveStore();
 
+/// A store that forgets everything. The tutorial runs on its own controller
+/// backed by this one, so a guided game can never overwrite - or resurrect -
+/// the real autosave behind the menu's Continue button.
+class NullSaveStore implements SaveStore {
+  @override
+  Future<void> save(String json) async {}
+
+  @override
+  Future<String?> load() async => null;
+
+  @override
+  Future<void> clear() async {}
+}
+
 /// Web autosave in localStorage via shared_preferences.
 class PrefsSaveStore implements SaveStore {
   static const _key = 'autosave_v1';

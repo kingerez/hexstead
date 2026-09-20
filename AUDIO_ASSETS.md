@@ -27,7 +27,7 @@ Music is mixed quieter than the one-shots on purpose (-16 LUFS against
 loops sparse: they run for a whole five-minute match under constant
 dice-rattling and banner sounds.
 
-## The 11 targets
+## The 13 targets
 
 `assets/audio/<name>.m4a`. Loops want 60-90s and must be seamless (start
 and end on the same beat, no fade); one-shots want 0.5-2s with an
@@ -46,6 +46,8 @@ immediate attack and no lead-in silence.
 | `sfx_match_point.m4a` | one-shot | 1-2s | a single distant warning horn, tense but not alarming |
 | `sfx_victory.m4a` | one-shot | 1.5-2s | a short triumphant lute and recorder flourish with a light cymbal |
 | `sfx_defeat.m4a` | one-shot | 1.5-2s | a soft descending recorder phrase, wistful rather than grim |
+| `sfx_ui_tap.m4a` | one-shot | 0.5s | a soft wooden button click, quiet and unobtrusive |
+| `sfx_tile_tap.m4a` | one-shot | 0.5s | a single light knock on a wooden board tile |
 
 The full generation prompts live alongside this table (kept separately);
 the subjects above are the one-line briefs each of them expands.
@@ -60,10 +62,12 @@ the subjects above are the one-line briefs each of them expands.
 | `sfx_card_play` | a card you played being dispatched |
 | `sfx_claim` | claiming a hex |
 | `sfx_upgrade` | upgrading a hex |
-| `sfx_production` | the payout chips floating over the board |
+| `sfx_production` | the payout chips floating over the board - only when something actually produced, never on a whiff |
 | `sfx_bandit` | the bandit's flight starting |
-| `sfx_match_point` | a match-point banner appearing |
+| `sfx_match_point` | the match-point banner for the last point only (1 away); the 3- and 2-away banners are silent |
 | `sfx_victory` / `sfx_defeat` | the game-end beat, by whether you won |
+| `sfx_ui_tap` | chrome that opens or acts: hand/shop/trade buttons, Roll the dice, the settings gear, shop Buy, trade chips and buttons, the setup chips and Begin, menu New Game / Continue |
+| `sfx_tile_tap` | a board tile picked for the inspector (tap or long press); never on claiming, bandit placement or card targeting, which have their own sounds |
 
 ## Checks before accepting a take
 

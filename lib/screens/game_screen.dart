@@ -18,6 +18,7 @@ import '../widgets/chrome.dart';
 import '../widgets/dice_roll_overlay.dart';
 import '../widgets/game_end_overlay.dart';
 import '../widgets/match_point_overlay.dart';
+import '../widgets/option_picker_dialog.dart';
 import '../widgets/resource_icon.dart';
 import '../widgets/settings_overlay.dart';
 import '../widgets/shop_overlay.dart';
@@ -26,14 +27,20 @@ import '../widgets/trade_overlay.dart';
 import '../widgets/production_overlay.dart';
 import '../widgets/tile_inspector.dart';
 import '../widgets/turn_splash_overlay.dart';
+import '../widgets/tutorial_banner.dart';
 import '../widgets/welcome_card.dart';
 import '../state/game_controller.dart';
+import '../tutorial/tutorial_director.dart';
 import 'game_over_screen.dart';
 
 class GameScreen extends StatefulWidget {
   final GameController controller;
 
-  const GameScreen({super.key, required this.controller});
+  /// Non-null runs the board in guided mode: the director narrows what the
+  /// player may do and narrates each step.
+  final TutorialDirector? tutorial;
+
+  const GameScreen({super.key, required this.controller, this.tutorial});
 
   @override
   State<GameScreen> createState() => _GameScreenState();
@@ -119,11 +126,24 @@ class _GameScreenState extends State<GameScreen> {
   GameController get controller => widget.controller;
   GameState get state => controller.state!;
 
+  /// What the player may actually do right now. Identical to the engine's
+  /// [legalActions] in a normal game; in the tutorial the director narrows
+  /// it to the one move the current lesson is about. Every button, glow and
+  /// tap target reads this, never [legalActions] directly, so gating the
+  /// tutorial is one decision rather than a dozen.
+  List<GameAction> get _allowed {
+    final actions = legalActions(state);
+    return widget.tutorial == null
+        ? actions
+        : widget.tutorial!.filter(actions);
+  }
+
   @override
   void initState() {
     super.initState();
     controller.addListener(_onStateChanged);
     controller.eventDelegate = _presentEvents;
+    widget.tutorial?.addListener(_onTutorialStep);
     SoundStore.instance.startMusic(MusicTrack.game);
     SharedPreferences.getInstance().then((prefs) {
       if (mounted) setState(() => _tipsOn = prefs.getBool('tips_on') ?? true);
@@ -135,7 +155,9 @@ class _GameScreenState extends State<GameScreen> {
       final step = _matchPointStep(state, p.id);
       if (step != null) _announcedProximity[p.id] = step;
     }
-    final fresh = state.round == 1 &&
+    // The tutorial does its own briefing, one banner at a time.
+    final fresh = widget.tutorial == null &&
+        state.round == 1 &&
         state.diceHistory.isEmpty &&
         controller.isHumanTurn;
     if (fresh) {
@@ -215,7 +237,7 @@ class _GameScreenState extends State<GameScreen> {
   /// direct plays dispatch, target cards enter tap-a-tile mode, and
   /// multi-option cards ask via a small dialog.
   Future<void> _handleCardPlay(String cardId) async {
-    final options = legalActions(state)
+    final options = _allowed
         .whereType<PlayCard>()
         .where((a) => a.cardId == cardId)
         .toList();
@@ -227,18 +249,31 @@ class _GameScreenState extends State<GameScreen> {
       return;
     }
     if (cardId == 'cutpurse' && options.length > 1) {
-      await _pickOption('Steal from…',
-          [for (final o in options) (state.players[o.targetPlayer!].name, o)]);
+      await _pickOption('Steal from…', [
+        for (final o in options)
+          PickerOption(
+            leading: PlayerSwatch(BoardPainter.playerColors[o.targetPlayer!]),
+            label: state.players[o.targetPlayer!].name,
+            value: o,
+          ),
+      ]);
       return;
     }
     if (cardId == 'bounty') {
-      await _pickOption(
-          'Take 2 of…', [for (final o in options) (o.resource!.name, o)]);
+      await _pickOption('Take 2 of…', [
+        for (final o in options)
+          PickerOption(
+            // The HUD's resource art, same asset and same emoji fallback.
+            leading: ResourceIcon(o.resource!, size: 22),
+            label: capitalized(o.resource!.name),
+            value: o,
+          ),
+      ]);
       return;
     }
     if (cardId == 'omen' && options.length > 1) {
       final (d1, d2) = state.lastDice!;
-      final action = await showDialog<PlayCard>(
+      final action = await showParchmentDialog<PlayCard>(
         context: context,
         builder: (_) => AdjustDieDialog(d1: d1, d2: d2, options: options),
       );
@@ -248,22 +283,29 @@ class _GameScreenState extends State<GameScreen> {
     await _tryDispatch(options.first);
   }
 
+  /// Asks which of several plays of one card to make. Tapping outside
+  /// answers nothing and dispatches nothing.
   Future<void> _pickOption(
-      String title, List<(String, PlayCard)> options) async {
-    final action = await showDialog<PlayCard>(
+      String title, List<PickerOption<PlayCard>> options) async {
+    final action = await showOptionPicker<PlayCard>(
       context: context,
-      builder: (dialogContext) => SimpleDialog(
-        title: Text(title),
-        children: [
-          for (final (label, a) in options)
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(dialogContext, a),
-              child: Text(label),
-            ),
-        ],
-      ),
+      title: title,
+      options: options,
     );
     if (action != null) await _tryDispatch(action);
+  }
+
+  /// Buying the bandit off costs two resources off the top, so it asks
+  /// first - and names the price it is about to take.
+  Future<void> _confirmRemoveBandit(RemoveBandit action) async {
+    final ok = await showConfirmDialog(
+      context: context,
+      title: 'Pay off the bandit?',
+      message: 'Chase him off your land for:',
+      body: ResourceCostRow(action.spend),
+      confirmLabel: 'Pay',
+    );
+    if (ok == true) await _tryDispatch(action);
   }
 
   void _toggleTips() {
@@ -275,10 +317,33 @@ class _GameScreenState extends State<GameScreen> {
   @override
   void dispose() {
     controller.removeListener(_onStateChanged);
+    widget.tutorial?.removeListener(_onTutorialStep);
     if (controller.eventDelegate == _presentEvents) {
       controller.eventDelegate = null;
     }
     super.dispose();
+  }
+
+  /// A lesson turned over: repaint, and drop any tile the previous step had
+  /// the player inspecting so the inspector does not follow them around.
+  /// The step that reads the inspector out loud opens right after the tap
+  /// that filled it, so that one keeps the selection.
+  void _onTutorialStep() {
+    if (!mounted) return;
+    setState(() {
+      if (!widget.tutorial!.current.keepSelection) _selected = null;
+    });
+  }
+
+  /// Closes the guided game: remembers that the offer was made, then walks
+  /// back to the menu. The tutorial's own controller and its NullSaveStore
+  /// go with the route - the real autosave was never touched.
+  Future<void> _finishTutorial() async {
+    final navigator = Navigator.of(context);
+    SoundStore.instance.startMusic(MusicTrack.menu);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(tutorialPromptSeenKey, true);
+    navigator.popUntil((r) => r.isFirst);
   }
 
   /// Awaited by the controller after every action: plays presentation
@@ -341,7 +406,9 @@ class _GameScreenState extends State<GameScreen> {
             : 'No hex is numbered $label';
       }
       final completer = Completer<void>();
-      SoundStore.instance.playSfx(Sfx.production);
+      // The whiff ("no hexes matched the roll") rides the same ceremony, and
+      // a coin sound over it would promise a payout that never came.
+      if (grants.isNotEmpty) SoundStore.instance.playSfx(Sfx.production);
       setState(() {
         _production = (grants, emptyMessage, const []);
         _productionCompleter = completer;
@@ -406,6 +473,10 @@ class _GameScreenState extends State<GameScreen> {
       });
       await completer.future;
     }
+    if (!mounted) return;
+    // Last of all: the guide only turns the page once the ceremonies that
+    // illustrate the lesson have finished playing.
+    widget.tutorial?.notifyEvents(events, state);
   }
 
   /// Calls out every player who just moved a step closer to the target, one
@@ -419,7 +490,9 @@ class _GameScreenState extends State<GameScreen> {
       if (announced != null && announced <= step) continue;
       _announcedProximity[p.id] = step;
       final completer = Completer<void>();
-      SoundStore.instance.playSfx(Sfx.matchPoint);
+      // Every step gets its banner, only the last one gets the horn: heard at
+      // 3 and 2 away as well, it stops meaning anything by the time it counts.
+      if (step == 1) SoundStore.instance.playSfx(Sfx.matchPoint);
       setState(() {
         _matchPointWarning = (
           '${p.isBot ? '${p.name} is' : 'You are'} $step '
@@ -497,6 +570,10 @@ class _GameScreenState extends State<GameScreen> {
     if (!mounted) return;
     setState(() {});
     final finished = controller.state;
+    // The scripted game tops out at 3 points, so this is belt and braces:
+    // the scoreboard records a high score the moment it mounts, and no
+    // rehearsal may ever land on the leaderboard.
+    if (widget.tutorial != null) return;
     if (finished?.phase == Phase.gameOver && !_navigatedToGameOver) {
       _navigatedToGameOver = true;
       if (_skipEndMoment) {
@@ -557,8 +634,10 @@ class _GameScreenState extends State<GameScreen> {
 
   /// Amber glow: claimable tiles, bandit targets, card targets.
   Set<Hex> get _highlighted {
+    // The guide points at exactly one thing at a time, whoever's turn it is.
+    if (widget.tutorial != null) return widget.tutorial!.current.highlightHexes;
     if (!controller.isHumanTurn) return const {};
-    final actions = legalActions(state);
+    final actions = _allowed;
     if (_pendingCardId != null) {
       return actions
           .whereType<PlayCard>()
@@ -587,7 +666,7 @@ class _GameScreenState extends State<GameScreen> {
   Set<Hex> get _seizeHighlighted {
     if (!controller.isHumanTurn || _pendingCardId != null) return const {};
     if (state.phase == Phase.awaitingBandit) return const {};
-    return legalActions(state)
+    return _allowed
         .whereType<SeizeHex>()
         .map((a) => a.target)
         .toSet();
@@ -595,7 +674,21 @@ class _GameScreenState extends State<GameScreen> {
 
   void _onTapHex(Hex hex) {
     if (!controller.isHumanTurn) return;
-    final actions = legalActions(state);
+    final actions = _allowed;
+    final tutorial = widget.tutorial;
+    if (tutorial != null) {
+      // One tile matters per step: the claim, the bandit's mark, or the hex
+      // the inspect lesson asks about. Everything else is a dead tap.
+      if (actions.contains(ClaimHex(hex))) {
+        _tryDispatch(ClaimHex(hex));
+      } else if (actions.contains(PlaceBandit(hex))) {
+        _tryDispatch(PlaceBandit(hex));
+      } else if (tutorial.current.inspectHex == hex) {
+        _selectForViewing(hex);
+        tutorial.notifyHexInspected(hex);
+      }
+      return;
+    }
     if (_pendingCardId != null) {
       // Capture before clearing: the where() filter is lazy and would
       // otherwise see the nulled field and match nothing.
@@ -625,7 +718,15 @@ class _GameScreenState extends State<GameScreen> {
       _confirmSeize(seize.first);
       return;
     }
-    setState(() => _selected = _selected == hex ? null : hex);
+    _selectForViewing(hex == _selected ? null : hex);
+  }
+
+  /// Selects (or clears) the inspector's tile. The knock is the sound of
+  /// picking a tile up for a look, so it rides the selection only - a second
+  /// tap putting it back down is silent.
+  void _selectForViewing(Hex? hex) {
+    if (hex != null) SoundStore.instance.playSfx(Sfx.tileTap);
+    setState(() => _selected = hex);
   }
 
   /// Upgrades from the inspector and keeps the tile selected, so the panel
@@ -636,46 +737,31 @@ class _GameScreenState extends State<GameScreen> {
     setState(() => _selected = hex);
   }
 
+  /// Taking a rival's hex is the most expensive thing on the board, so it
+  /// asks first and names the whole price.
   Future<void> _confirmSeize(SeizeHex action) async {
     final tile = state.tiles[action.target]!;
     final victim = state.players[tile.ownerId!];
-    final counts = <Resource, int>{};
-    for (final r in action.spend) {
-      counts[r] = (counts[r] ?? 0) + 1;
-    }
-    final ok = await showDialog<bool>(
+    final ok = await showConfirmDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('Seize from ${victim.name}?'),
-        content: Text.rich(
-          TextSpan(children: [
-            TextSpan(text: 'Take their Level-${tile.level} hex for:\n\n'),
-            ...costSpans(counts, 14, countFirst: true, separator: '  '),
-          ]),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Seize'),
-          ),
-        ],
-      ),
+      title: 'Seize from ${victim.name}?',
+      message: 'Take their Level-${tile.level} hex for:',
+      body: ResourceCostRow(action.spend),
+      confirmLabel: 'Seize',
     );
     if (ok == true) await _tryDispatch(action);
   }
 
   /// One short sentence about the current moment; null hides the balloon.
   String? _currentTip() {
+    // In the tutorial the guide banner is the only voice.
+    if (widget.tutorial != null) return null;
     if (_rollingDice != null || _banditFlyTarget != null) return null;
     if (_pendingCardId != null) return null;
     if (!controller.isHumanTurn) {
       return 'Rival rolls pay you too - your hexes always earn.';
     }
-    final actions = legalActions(state);
+    final actions = _allowed;
     final canBuyLandmark = actions.any((a) => a is BuyLandmark);
     switch (state.phase) {
       case Phase.awaitingRoll:
@@ -729,11 +815,19 @@ class _GameScreenState extends State<GameScreen> {
     final human = state.players.firstWhere((p) => !p.isBot);
     // Glow hints: something is actually buyable/tradeable right now, and no
     // ceremony is running that would steal the eye.
-    final hints = controller.isHumanTurn && !_busy
-        ? legalActions(state)
-        : const <GameAction>[];
-    final shopGlow = hints.any((a) => a is BuyLandmark);
-    final tradeGlow = hints.any((a) => a is BankTrade);
+    final allowed = _allowed;
+    final hints =
+        controller.isHumanTurn && !_busy ? allowed : const <GameAction>[];
+    // In guided mode the glow follows the lesson, not the purse: the step
+    // says which button to press, and only that one lights up.
+    final tutorial = widget.tutorial;
+    final targets = tutorial?.current.targets ?? const <TutorialTarget>{};
+    final shopGlow = tutorial != null
+        ? targets.contains(TutorialTarget.shopButton)
+        : hints.any((a) => a is BuyLandmark);
+    final tradeGlow = tutorial != null
+        ? targets.contains(TutorialTarget.tradeButton)
+        : hints.any((a) => a is BankTrade);
     return Scaffold(
       backgroundColor: const Color(0xFF2E4034),
       body: Stack(
@@ -778,8 +872,7 @@ class _GameScreenState extends State<GameScreen> {
                         onTapHex: _onTapHex,
                         // Long press is pure inspection: a claimable or
                         // seizable hex can be studied without acting on it.
-                        onLongPressHex: (hex) =>
-                            setState(() => _selected = hex),
+                        onLongPressHex: _selectForViewing,
                       ),
                     ),
                     Positioned(
@@ -796,8 +889,10 @@ class _GameScreenState extends State<GameScreen> {
                         resourcesMaxWidth:
                             (constraints.maxWidth - 116).clamp(140.0, 480.0),
                         onToggleTips: _toggleTips,
-                        onOpenSettings: () =>
-                            setState(() => _settingsOpen = true),
+                        onOpenSettings: () {
+                          SoundStore.instance.playSfx(Sfx.uiTap);
+                          setState(() => _settingsOpen = true);
+                        },
                       ),
                     ),
                     Positioned(
@@ -827,11 +922,20 @@ class _GameScreenState extends State<GameScreen> {
                             controller: controller,
                             rolling: _rollingDice != null,
                             onAction: _tryDispatch,
-                            onOpenCards: () =>
-                                setState(() => _cardFanOpen = true),
-                            onOpenShop: () => setState(() => _shopOpen = true),
-                            onOpenTrade: () =>
-                                setState(() => _tradeOpen = true),
+                            onRemoveBandit: _confirmRemoveBandit,
+                            onOpenCards: () {
+                              setState(() => _cardFanOpen = true);
+                              tutorial?.notifyUi(TutorialUiSignal.fanOpened);
+                            },
+                            onOpenShop: () {
+                              setState(() => _shopOpen = true);
+                              tutorial?.notifyUi(TutorialUiSignal.shopOpened);
+                            },
+                            onOpenTrade: () {
+                              setState(() => _tradeOpen = true);
+                              tutorial?.notifyUi(TutorialUiSignal.tradeOpened);
+                            },
+                            tutorialTargets: tutorial == null ? null : targets,
                             shopGlow: shopGlow,
                             tradeGlow: tradeGlow,
                             cardIconKey: _cardIconKey,
@@ -847,10 +951,10 @@ class _GameScreenState extends State<GameScreen> {
                                 ? null
                                 : state.tiles[_selected!],
                             humanPlayerId: human.id,
+                            allowed: allowed,
                             upgradeEnabled: _selected != null &&
                                 controller.isHumanTurn &&
-                                legalActions(state)
-                                    .contains(UpgradeHex(_selected!)),
+                                allowed.contains(UpgradeHex(_selected!)),
                             onUpgrade: () => _upgradeSelected(_selected!),
                           ),
                         ),
@@ -958,6 +1062,27 @@ class _GameScreenState extends State<GameScreen> {
               },
             ),
           ),
+          // The guide strip takes the tip balloon's slot: clear of the
+          // toggle column on its left, so settings (and the way out of the
+          // tutorial) stays reachable behind it.
+          if (tutorial != null && !tutorial.finished)
+            Positioned(
+              left: 48,
+              right: 12,
+              top: MediaQuery.paddingOf(context).top + 44,
+              child: TutorialBanner(
+                key: ValueKey(tutorial.current.id),
+                text: tutorial.current.text,
+                buttonLabel: !tutorial.current.showNext
+                    ? null
+                    : tutorial.isLastStep
+                        ? 'Finish'
+                        : 'Next',
+                onButton: tutorial.isLastStep
+                    ? _finishTutorial
+                    : () => tutorial.notifyUi(TutorialUiSignal.next),
+              ),
+            ),
           if (_showWelcome)
             WelcomeOverlay(state: state, onStart: _dismissWelcome),
           if (_cardFanOpen)
@@ -965,13 +1090,13 @@ class _GameScreenState extends State<GameScreen> {
               cardIds: human.hand,
               flyOffset: _fanFlyOffset(),
               playableCardIds: controller.isHumanTurn
-                  ? legalActions(state)
+                  ? allowed
                       .whereType<PlayCard>()
                       .map((a) => a.cardId)
                       .toSet()
                   : const {},
               replaceableCardIds: controller.isHumanTurn
-                  ? legalActions(state)
+                  ? allowed
                       .whereType<ReplaceCard>()
                       .map((a) => a.cardId)
                       .toSet()
@@ -995,11 +1120,12 @@ class _GameScreenState extends State<GameScreen> {
           if (_shopOpen)
             ShopOverlay(
               state: state,
-              buyableIds: legalActions(state)
+              buyableIds: allowed
                   .whereType<BuyLandmark>()
                   .map((a) => a.landmarkId)
                   .toSet(),
               onBuy: (id) {
+                SoundStore.instance.playSfx(Sfx.uiTap);
                 setState(() => _shopOpen = false);
                 _tryDispatch(BuyLandmark(id));
               },
@@ -1007,6 +1133,11 @@ class _GameScreenState extends State<GameScreen> {
             ),
           if (_settingsOpen)
             SettingsOverlay(
+              quitTitle: tutorial == null ? null : 'Leave the tutorial?',
+              quitMessage: tutorial == null
+                  ? null
+                  : 'You can start it again from the menu whenever you '
+                      'like.',
               onClose: () => setState(() => _settingsOpen = false),
               onQuitToMenu: () {
                 SoundStore.instance.startMusic(MusicTrack.menu);
@@ -1016,9 +1147,13 @@ class _GameScreenState extends State<GameScreen> {
           if (_tradeOpen)
             TradeOverlay(
               state: state,
-              legalTrades:
-                  legalActions(state).whereType<BankTrade>().toList(),
-              onTrade: _tryDispatch,
+              legalTrades: allowed.whereType<BankTrade>().toList(),
+              // A normal game leaves the counter open for a second trade;
+              // the tutorial's next lesson is elsewhere, so it shuts.
+              onTrade: (t) {
+                if (tutorial != null) setState(() => _tradeOpen = false);
+                _tryDispatch(t);
+              },
               onClose: () => setState(() => _tradeOpen = false),
             ),
           // The last ceremony of all: it paints over every other overlay and
@@ -1069,7 +1204,12 @@ class _RoundActionButton extends StatelessWidget {
       elevation: 4,
       child: InkWell(
         customBorder: const CircleBorder(),
-        onTap: enabled ? onTap : null,
+        onTap: enabled
+            ? () {
+                SoundStore.instance.playSfx(Sfx.uiTap);
+                onTap();
+              }
+            : null,
         child: SizedBox(
           width: size,
           height: size,
@@ -1379,6 +1519,11 @@ class _BottomCluster extends StatelessWidget {
   final GameController controller;
   final bool rolling;
   final Future<void> Function(GameAction) onAction;
+
+  /// Routed to the screen rather than dispatched here: paying the bandit
+  /// off asks for confirmation first, and the dialog needs the screen's
+  /// context (same shape as the seize confirmation).
+  final void Function(RemoveBandit) onRemoveBandit;
   final VoidCallback onOpenCards;
   final VoidCallback onOpenShop;
   final VoidCallback onOpenTrade;
@@ -1402,10 +1547,21 @@ class _BottomCluster extends StatelessWidget {
   final bool upgradeEnabled;
   final VoidCallback onUpgrade;
 
+  /// What the player may do right now - the engine's legal moves, or the
+  /// tutorial's narrowed slice of them. Buttons enable off this, never off
+  /// [legalActions].
+  final List<GameAction> allowed;
+
+  /// Null outside the tutorial. Inside it, the chrome the current step
+  /// points at: those buttons glow and work, the rest go dead.
+  final Set<TutorialTarget>? tutorialTargets;
+
   const _BottomCluster({
     required this.controller,
     required this.rolling,
     required this.onAction,
+    required this.onRemoveBandit,
+    required this.allowed,
     required this.onOpenCards,
     required this.onOpenShop,
     required this.onOpenTrade,
@@ -1420,10 +1576,20 @@ class _BottomCluster extends StatelessWidget {
     this.cardIconKey,
     this.taskChipKey,
     this.taskHidden = false,
+    this.tutorialTargets,
   });
 
   /// Shared size for the hand/shop/trade trio so they read as one family.
   static const _buttonSize = 44.0;
+
+  /// Whether the guide is pointing at [target] right now.
+  bool _aims(TutorialTarget target) =>
+      tutorialTargets?.contains(target) ?? false;
+
+  /// A button is live when the game allows it and - in the tutorial - when
+  /// the current lesson is actually about it.
+  bool _live(bool base, TutorialTarget target) =>
+      base && (tutorialTargets == null || _aims(target));
 
   @override
   Widget build(BuildContext context) {
@@ -1495,7 +1661,8 @@ class _BottomCluster extends StatelessWidget {
                   _RoundActionButton(
                     key: cardIconKey,
                     size: _buttonSize,
-                    enabled: buttonsEnabled,
+                    enabled: _live(buttonsEnabled, TutorialTarget.cardsButton),
+                    glow: _aims(TutorialTarget.cardsButton),
                     onTap: onOpenCards,
                     // The painter is drawn at 44x32; fit it to the disc.
                     child: SizedBox(
@@ -1510,7 +1677,7 @@ class _BottomCluster extends StatelessWidget {
                   _RoundActionButton(
                     key: ValueKey(shopGlow ? 'shop-glow' : 'shop'),
                     size: _buttonSize,
-                    enabled: buttonsEnabled,
+                    enabled: _live(buttonsEnabled, TutorialTarget.shopButton),
                     glow: shopGlow,
                     onTap: onOpenShop,
                     child: const Text('🏛', style: TextStyle(fontSize: 21)),
@@ -1519,7 +1686,7 @@ class _BottomCluster extends StatelessWidget {
                   _RoundActionButton(
                     key: ValueKey(tradeGlow ? 'trade-glow' : 'trade'),
                     size: _buttonSize,
-                    enabled: buttonsEnabled,
+                    enabled: _live(buttonsEnabled, TutorialTarget.tradeButton),
                     glow: tradeGlow,
                     onTap: onOpenTrade,
                     child: const Icon(Icons.handshake,
@@ -1556,25 +1723,29 @@ class _BottomCluster extends StatelessWidget {
       maintainState: true,
       child: Tooltip(
         message: objective.description,
-        child: Container(
-          key: taskChipKey,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: chromePill(),
-          child: Text.rich(
-            TextSpan(children: [
-              taskSpan(14),
-              TextSpan(
-                text: ' ${done ? target : current}/$target '
-                    '${objective.shortLabel}${done ? ' ✓' : ''}',
+        child: TutorialGlow(
+          active: _aims(TutorialTarget.taskChip),
+          radius: 12,
+          child: Container(
+            key: taskChipKey,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: chromePill(),
+            child: Text.rich(
+              TextSpan(children: [
+                taskSpan(14),
+                TextSpan(
+                  text: ' ${done ? target : current}/$target '
+                      '${objective.shortLabel}${done ? ' ✓' : ''}',
+                ),
+              ]),
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.visible,
+              style: TextStyle(
+                color: done ? const Color(0xFFFFCA28) : Colors.white70,
+                fontSize: 14,
+                fontWeight: done ? FontWeight.w700 : FontWeight.w500,
               ),
-            ]),
-            maxLines: 1,
-            softWrap: false,
-            overflow: TextOverflow.visible,
-            style: TextStyle(
-              color: done ? const Color(0xFFFFCA28) : Colors.white70,
-              fontSize: 14,
-              fontWeight: done ? FontWeight.w700 : FontWeight.w500,
             ),
           ),
         ),
@@ -1604,10 +1775,18 @@ class _BottomCluster extends StatelessWidget {
     }
     switch (state.phase) {
       case Phase.awaitingRoll:
-        return FilledButton.icon(
-          onPressed: () => onAction(const RollDice()),
-          icon: const Text('🎲', style: TextStyle(fontSize: 20)),
-          label: const Text('Roll the dice'),
+        return TutorialGlow(
+          active: _aims(TutorialTarget.rollButton),
+          child: FilledButton.icon(
+            onPressed: allowed.contains(const RollDice())
+                ? () {
+                    SoundStore.instance.playSfx(Sfx.uiTap);
+                    onAction(const RollDice());
+                  }
+                : null,
+            icon: const Text('🎲', style: TextStyle(fontSize: 20)),
+            label: const Text('Roll the dice'),
+          ),
         );
       case Phase.awaitingChoice:
         final (d1, d2) = state.lastDice!;
@@ -1621,16 +1800,28 @@ class _BottomCluster extends StatelessWidget {
               const SizedBox(width: 5),
               MiniDie(d2),
               const SizedBox(width: 12),
-              FilledButton(
-                onPressed: () =>
-                    onAction(const ChooseActivation(ActivationMode.sum)),
-                child: Text(sum == 7 ? 'Bandit!' : 'Sum $sum'),
+              TutorialGlow(
+                active: _aims(TutorialTarget.sumButton),
+                child: FilledButton(
+                  onPressed: allowed
+                          .contains(const ChooseActivation(ActivationMode.sum))
+                      ? () =>
+                          onAction(const ChooseActivation(ActivationMode.sum))
+                      : null,
+                  child: Text(sum == 7 ? 'Bandit!' : 'Sum $sum'),
+                ),
               ),
               const SizedBox(width: 8),
-              FilledButton.tonal(
-                onPressed: () =>
-                    onAction(const ChooseActivation(ActivationMode.split)),
-                child: Text('Split $d1 & $d2'),
+              TutorialGlow(
+                active: _aims(TutorialTarget.splitButton),
+                child: FilledButton.tonal(
+                  onPressed: allowed.contains(
+                          const ChooseActivation(ActivationMode.split))
+                      ? () =>
+                          onAction(const ChooseActivation(ActivationMode.split))
+                      : null,
+                  child: Text('Split $d1 & $d2'),
+                ),
               ),
             ],
           ),
@@ -1640,17 +1831,20 @@ class _BottomCluster extends StatelessWidget {
             color: Colors.amber);
       case Phase.main:
         final canRemoveBandit =
-            legalActions(state).whereType<RemoveBandit>().isNotEmpty;
+            allowed.whereType<RemoveBandit>().isNotEmpty;
         final canBuild =
-            legalActions(state).any((a) => a is ClaimHex || a is UpgradeHex);
+            allowed.any((a) => a is ClaimHex || a is UpgradeHex);
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _statusPill(
-              canBuild
-                  ? 'Tap a glowing tile to claim it'
-                  : 'Nothing affordable - end your turn',
-            ),
+            // The guide banner is the tutorial's only running commentary -
+            // a second line reading off the purse would contradict it.
+            if (tutorialTargets == null)
+              _statusPill(
+                canBuild
+                    ? 'Tap a glowing tile to claim it'
+                    : 'Nothing affordable - end your turn',
+              ),
             const SizedBox(height: 4),
             FittedBox(
               fit: BoxFit.scaleDown,
@@ -1659,14 +1853,19 @@ class _BottomCluster extends StatelessWidget {
                 children: [
                   if (canRemoveBandit)
                     FilledButton.tonal(
-                      onPressed: () => onAction(
-                          legalActions(state).whereType<RemoveBandit>().first),
+                      onPressed: () => onRemoveBandit(
+                          allowed.whereType<RemoveBandit>().first),
                       child: const Text('Pay off bandit'),
                     ),
                   const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: () => onAction(const EndTurn()),
-                    child: const Text('End Turn'),
+                  TutorialGlow(
+                    active: _aims(TutorialTarget.endTurnButton),
+                    child: FilledButton(
+                      onPressed: allowed.contains(const EndTurn())
+                          ? () => onAction(const EndTurn())
+                          : null,
+                      child: const Text('End Turn'),
+                    ),
                   ),
                 ],
               ),

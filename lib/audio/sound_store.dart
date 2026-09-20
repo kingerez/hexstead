@@ -23,7 +23,11 @@ enum Sfx {
   bandit('sfx_bandit'),
   matchPoint('sfx_match_point'),
   victory('sfx_victory'),
-  defeat('sfx_defeat');
+  defeat('sfx_defeat'),
+  // Chrome, not ceremony: a button acting on something, and a board tile
+  // being picked up for a look.
+  uiTap('sfx_ui_tap'),
+  tileTap('sfx_tile_tap');
 
   const Sfx(this.file);
 
@@ -105,9 +109,21 @@ class SoundStore {
   /// AssetSource resolves against AudioCache's 'assets/' prefix.
   Source _source(String file) => AssetSource('audio/$file.m4a');
 
-  /// Fires a one-shot. No-op when sounds are off or the file is not bundled.
+  /// Fires a one-shot. No-op when sounds are off or the file is not bundled -
+  /// except the two UI ticks, which fall back to the OS keyboard click, so
+  /// taps are audible before any custom file lands (and are replaced by it).
   Future<void> playSfx(Sfx sfx) async {
-    if (!_sfxOn || _broken || !_has(sfx.file)) return;
+    if (!_sfxOn) return;
+    if (_broken || !_has(sfx.file)) {
+      if (!_has(sfx.file) && (sfx == Sfx.uiTap || sfx == Sfx.tileTap)) {
+        try {
+          await SystemSound.play(SystemSoundType.click);
+        } catch (_) {
+          // No services binding (plain unit tests) - stay silent.
+        }
+      }
+      return;
+    }
     try {
       var player = _sfxPlayers[sfx];
       if (player == null) {

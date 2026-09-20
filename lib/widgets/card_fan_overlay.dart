@@ -196,10 +196,9 @@ class _CardFanOverlayState extends State<CardFanOverlay>
 /// interactive slots. Shared by the hand fan and the bot-play reveal so a
 /// card always looks the same wherever it appears.
 class ActionCardFace extends StatelessWidget {
-  /// Natural size, margins included - callers that blow a card up need it
-  /// to reserve the right amount of layout space.
-  static const width = 114.0;
-  static const height = 176.0;
+  /// Natural size of the face, margins excluded; [layoutScale] multiplies it.
+  static const _width = 108.0;
+  static const _height = 176.0;
 
   final String cardId;
 
@@ -209,21 +208,32 @@ class ActionCardFace extends StatelessWidget {
   /// Bottom slot (the fan's Play button or timing hint).
   final Widget? footer;
 
+  /// Blows the card's box, paddings and art up by this factor - for a card
+  /// shown alone (the bot-play reveal) rather than in the hand fan. The text
+  /// deliberately does NOT follow it: see [_textScale].
+  final double layoutScale;
+
   const ActionCardFace({
     super.key,
     required this.cardId,
     this.trailing,
     this.footer,
+    this.layoutScale = 1,
   });
+
+  /// A blown-up card is about giving the rules room, not shouting them, so
+  /// the type grows a fraction of what the card does - roughly a fifth bump
+  /// at the reveal's 1.9x, against text almost twice hand size before.
+  double get _textScale => 1 + (layoutScale - 1) * 0.22;
 
   @override
   Widget build(BuildContext context) {
     final spec = cardCatalog[cardId]!;
     return Container(
-      width: 108,
-      height: 176,
-      margin: const EdgeInsets.symmetric(horizontal: 3),
-      padding: const EdgeInsets.all(10),
+      width: _width * layoutScale,
+      height: _height * layoutScale,
+      margin: EdgeInsets.symmetric(horizontal: 3 * layoutScale),
+      padding: EdgeInsets.all(10 * layoutScale),
       clipBehavior: Clip.antiAlias,
       decoration: parchmentPanel(
         shadows: const [
@@ -242,14 +252,14 @@ class ActionCardFace extends StatelessWidget {
           // Faded art bleeding off the bottom-right corner; plain parchment
           // when the card has no art bundled.
           Positioned(
-            right: -14,
-            bottom: -8,
+            right: -14 * layoutScale,
+            bottom: -8 * layoutScale,
             child: Opacity(
               opacity: 0.18,
               child: ArtStore.instance.image(
                 'assets/images/cards/art_$cardId.png',
-                width: 92,
-                height: 92,
+                width: 92 * layoutScale,
+                height: 92 * layoutScale,
                 fit: BoxFit.contain,
                 placeholder: const SizedBox.shrink(),
               ),
@@ -262,19 +272,20 @@ class ActionCardFace extends StatelessWidget {
                 spec.name,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 13,
+                style: TextStyle(
+                  fontSize: 13 * _textScale,
                   fontWeight: FontWeight.w800,
-                  color: Color(0xFF3A2E20),
+                  color: const Color(0xFF3A2E20),
                 ),
               ),
-              const SizedBox(height: 6),
+              SizedBox(height: 6 * layoutScale),
               Expanded(
                 child: Text(
                   spec.description,
                   overflow: TextOverflow.fade,
-                  style:
-                      const TextStyle(fontSize: 11, color: Color(0xFF5A4A34)),
+                  style: TextStyle(
+                      fontSize: 11 * _textScale,
+                      color: const Color(0xFF5A4A34)),
                 ),
               ),
               ?footer,

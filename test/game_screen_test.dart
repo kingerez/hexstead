@@ -693,6 +693,29 @@ void main() {
     expect(find.byType(GameOverScreen), findsOneWidget);
   });
 
+  testWidgets('a finished game leaves no autosave behind', (tester) async {
+    // Same target-claiming upgrade as the beat above: the point here is what
+    // it does to the save, so the menu cannot offer a dead Continue.
+    final controller = await pumpResumed(
+      tester,
+      fixture(
+        resources: const {Resource.grain: 2, Resource.stone: 1},
+        targetVp: 4,
+      ),
+    );
+    expect(await controller.hasResumableGame(), isTrue);
+
+    await tester.tap(find.byType(BoardWidget));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Upgrade'));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(controller.state!.phase, Phase.gameOver);
+    expect(await controller.hasResumableGame(), isFalse);
+    // Let the end ceremony and the scoreboard hand-off drain.
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('a rival win gets the banner without the fireworks',
       (tester) async {
     await tester.pumpWidget(MaterialApp(

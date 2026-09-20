@@ -21,6 +21,12 @@ Future<void> main() async {
   );
 }
 
+/// Route lifecycle feed for screens that must refresh when they come back
+/// into view. The menu needs it: a pushReplacement further down the stack
+/// (setup -> game) completes its awaited push early, so the push future says
+/// nothing about when the user is actually looking at the menu again.
+final routeObserver = RouteObserver<PageRoute<dynamic>>();
+
 class HexsteadApp extends StatelessWidget {
   final GameController controller;
 
@@ -31,6 +37,7 @@ class HexsteadApp extends StatelessWidget {
     return MaterialApp(
       title: 'Hexstead',
       debugShowCheckedModeBanner: false,
+      navigatorObservers: [routeObserver],
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF6B8F4E),
