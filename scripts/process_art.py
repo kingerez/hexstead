@@ -32,6 +32,8 @@ TARGETS = {
        for t in ["forest", "field", "hill", "mountain", "desert"]},
     "bandit": ("bandit.png", 256, True),
     "bg_menu": ("ui/bg_menu.png", None, False),
+    "bg_victory": ("ui/bg_victory.png", None, False),
+    "bg_defeat": ("ui/bg_defeat.png", None, False),
     "panel_bg": ("ui/panel_bg.png", 256, False),
     **{f"lm_{l}": (f"landmarks/lm_{l}.png", 256, True)
        for l in ["high_roller", "trade_post", "cheap_claims", "bandit_ward",
@@ -39,6 +41,7 @@ TARGETS = {
                  "market_hall", "watchtower", "keep"]},
     **{r: (f"resources/{r}.png", 128, True)
        for r in ["wood", "grain", "brick", "stone"]},
+    "icon_task": ("ui/icon_task.png", 128, True),
     **{f"art_{c}": (f"cards/art_{c}.png", 384, True)
        for c in ["second_chance", "omen", "drought", "charter", "cutpurse",
                  "bounty", "banish", "brigand", "harvest", "tithe"]},

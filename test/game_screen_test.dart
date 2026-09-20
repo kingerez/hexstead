@@ -1,11 +1,16 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hexstead/board/board_widget.dart';
+import 'package:hexstead/screens/game_over_screen.dart';
 import 'package:hexstead/screens/game_screen.dart';
 import 'package:hexstead/widgets/card_fan_overlay.dart';
 import 'package:hexstead/widgets/dice_roll_overlay.dart';
+import 'package:hexstead/widgets/fireworks.dart';
+import 'package:hexstead/widgets/game_end_overlay.dart';
+import 'package:hexstead/widgets/task_reveal_overlay.dart';
 import 'package:hexstead/widgets/tile_inspector.dart';
 import 'package:hexstead/state/game_controller.dart';
 import 'package:hexstead/state/persistence.dart';
@@ -36,12 +41,57 @@ Future<void> dismissWelcome(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// A fresh game pumped up to the opening card fan: welcome card dismissed,
+/// the hand on screen, the task reveal still queued behind it.
+Future<GameController> startFreshGame(WidgetTester tester) async {
+  SharedPreferences.setMockInitialValues({});
+  final controller = GameController(
+    saveStore: InMemorySaveStore(),
+    botStepDelay: Duration.zero,
+  );
+  await controller.startNewGame(seed: 12, players: const [
+    PlayerSetup(name: 'You', isBot: false),
+    PlayerSetup(name: 'Bot', isBot: true),
+  ]);
+  await tester.pumpWidget(
+    MaterialApp(home: GameScreen(controller: controller)),
+  );
+  await tester.pump(const Duration(milliseconds: 600));
+  await tester.tap(find.text('Start'));
+  await tester.pumpAndSettle();
+  return controller;
+}
+
+/// Taps the opening fan away and stops on the frame where the task reveal
+/// has just taken over - no pumpAndSettle, the reveal is still running.
+Future<void> closeOpeningFan(WidgetTester tester) async {
+  await tester.tapAt(const Offset(10, 100));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+  await tester.pump();
+}
+
+/// Whether the HUD's task chip is painting: the game-start reveal keeps it
+/// laid out but hidden while its banner is still in flight.
+bool taskChipVisible(WidgetTester tester, String chipNeedle) {
+  final chip = find.textContaining(chipNeedle, findRichText: true);
+  expect(chip, findsWidgets);
+  return tester
+      .widget<Visibility>(
+        find.ancestor(of: chip.first, matching: find.byType(Visibility)).first,
+      )
+      .visible;
+}
+
 /// Resumed mid-game state (so no welcome card): human to act in the main
 /// phase, owning two forests, with whatever purse and offer a test needs.
 GameState fixture({
   Map<Resource, int> resources = const {},
   List<String> landmarkOffer = const [],
   String objectiveId = 'forester',
+  // Out of reach by default, so scoring never trips the endgame chrome; the
+  // match-point tests pull it down within a move or two of the human.
+  int targetVp = 99,
 }) {
   const tilesSpec = [
     (Hex(0, 0), TerrainType.forest, 8, 0, 1),
@@ -54,7 +104,7 @@ GameState fixture({
     rng: GameRng(1),
     round: 3,
     roundCap: 15,
-    targetVp: 99,
+    targetVp: targetVp,
     currentPlayerIndex: 0,
     phase: Phase.main,
     tiles: {
@@ -513,36 +563,149 @@ void main() {
     expect(find.byKey(const ValueKey('shop')), findsOneWidget);
   });
 
-  testWidgets('the game-start card reveal restates the secret task',
+  testWidgets('the game-start reveal flies the secret task into its chip',
       (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    final controller = GameController(
-      saveStore: InMemorySaveStore(),
-      botStepDelay: Duration.zero,
-    );
-    await controller.startNewGame(seed: 12, players: const [
-      PlayerSetup(name: 'You', isBot: false),
-      PlayerSetup(name: 'Bot', isBot: true),
-    ]);
-    await tester.pumpWidget(
-      MaterialApp(home: GameScreen(controller: controller)),
-    );
-    await tester.pump(const Duration(milliseconds: 600));
-    await tester.tap(find.text('Start'));
-    await tester.pumpAndSettle();
+    final controller = await startFreshGame(tester);
 
-    final objective =
-        objectiveCatalog[controller.state!.players.first.objectiveId]!;
+    final state = controller.state!;
+    final objective = objectiveCatalog[state.players.first.objectiveId]!;
+    final chipNeedle =
+        '/${objective.progress(state, 0).$2} ${objective.shortLabel}';
+
+    // The fan itself is plain now: the welcome card already said the task.
+    expect(find.byType(CardFanOverlay), findsOneWidget);
     expect(
-      find.text('🎯 Secret task: ${objective.description}'),
+      find.textContaining('Secret task:', findRichText: true),
+      findsNothing,
+    );
+
+    // Dismissing the fan hands over to the big reveal, and the chip holds
+    // its spot unpainted until the banner lands on it.
+    await closeOpeningFan(tester);
+    expect(find.byType(TaskRevealOverlay), findsOneWidget);
+    expect(
+      find.textContaining('Secret task: ${objective.description}',
+          findRichText: true),
       findsWidgets,
     );
+    expect(taskChipVisible(tester, chipNeedle), isFalse);
 
-    // Only the opening reveal carries it: a later fan is plain.
-    await tester.tapAt(const Offset(10, 100));
-    await tester.pumpAndSettle();
+    // Still up mid-hold: the point of the reveal is that it can be read.
+    await tester.pump(const Duration(milliseconds: 1200));
+    expect(find.byType(TaskRevealOverlay), findsOneWidget);
+
+    // Entry, hold and flight over: banner gone, chip showing.
+    await tester.pump(const Duration(milliseconds: 2000));
+    await tester.pump();
+    expect(find.byType(TaskRevealOverlay), findsNothing);
+    expect(taskChipVisible(tester, chipNeedle), isTrue);
+
+    // Reopening the hand mid-game replays none of it.
     await tester.tap(find.byType(CardFanIcon));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Secret task:'), findsNothing);
+    expect(find.byType(TaskRevealOverlay), findsNothing);
+    expect(
+      find.textContaining('Secret task:', findRichText: true),
+      findsNothing,
+    );
+  });
+
+  testWidgets('a tap during the task reveal cuts straight to the flight',
+      (tester) async {
+    await startFreshGame(tester);
+    await closeOpeningFan(tester);
+    expect(find.byType(TaskRevealOverlay), findsOneWidget);
+
+    // Tapped 500ms in, the banner flies at once: gone inside the 600ms
+    // flight, long before the 2.2s hold would have run out.
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tapAt(const Offset(5, 5));
+    // The first frame after the tap only starts the restarted flight clock.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 650));
+    await tester.pump();
+    expect(find.byType(TaskRevealOverlay), findsNothing);
+  });
+
+  testWidgets('crossing into match point warns once, and only once',
+      (tester) async {
+    // Two connected forests score 2; upgrading one to a village doubles the
+    // region to 4, which is 3 short of this target.
+    final controller = await pumpResumed(
+      tester,
+      fixture(
+        resources: const {Resource.grain: 2, Resource.stone: 1, Resource.wood: 3},
+        targetVp: 7,
+      ),
+    );
+    expect(find.textContaining('from victory'), findsNothing);
+
+    await tester.tap(find.byType(BoardWidget));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Upgrade'));
+    // Mid-hold: the warning names the step, not the score.
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(scoreFor(controller.state!, 0), 4);
+    expect(find.text('You are 3 points from victory!'), findsWidgets);
+
+    await tester.pumpAndSettle();
+    expect(find.textContaining('from victory'), findsNothing);
+
+    // A trade leaves the score where it was, so the step is not re-announced.
+    final trade = legalActions(controller.state!).whereType<BankTrade>().first;
+    // Unawaited: the presentation queue only drains on pumped frames.
+    unawaited(controller.dispatch(trade));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.textContaining('from victory'), findsNothing);
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('the game-end moment holds, then the scoreboard takes over',
+      (tester) async {
+    // The upgrade takes the human to 4 points, which is this game's target.
+    await pumpResumed(
+      tester,
+      fixture(
+        resources: const {Resource.grain: 2, Resource.stone: 1},
+        targetVp: 4,
+      ),
+    );
+
+    await tester.tap(find.byType(BoardWidget));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Upgrade'));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // The moment owns the screen first; the scoreboard waits its turn.
+    expect(find.byType(GameEndOverlay), findsOneWidget);
+    expect(find.text('The realm is claimed!'), findsWidgets);
+    expect(find.byType(GameOverScreen), findsNothing);
+    // The human took the target, so the sky joins in.
+    expect(find.byType(Fireworks), findsOneWidget);
+
+    // Still holding well past the old 1.8s: the line has 3.2s to be read.
+    await tester.pump(const Duration(milliseconds: 2500));
+    expect(find.text('The realm is claimed!'), findsWidgets);
+    expect(find.byType(GameOverScreen), findsNothing);
+
+    await tester.pumpAndSettle();
+    expect(find.byType(GameEndOverlay), findsNothing);
+    expect(find.byType(GameOverScreen), findsOneWidget);
+  });
+
+  testWidgets('a rival win gets the banner without the fireworks',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Stack(
+        children: [
+          GameEndOverlay(text: 'The seasons have turned.', onDone: () {}),
+        ],
+      ),
+    ));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('The seasons have turned.'), findsWidgets);
+    expect(find.byType(Fireworks), findsNothing);
+    await tester.pumpAndSettle();
   });
 }

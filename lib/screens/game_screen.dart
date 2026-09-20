@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../art/art_store.dart';
+import '../audio/sound_store.dart';
 import '../board/board_geometry.dart';
 import '../board/board_painter.dart';
 import '../board/board_widget.dart';
@@ -14,8 +16,12 @@ import '../widgets/bot_card_overlay.dart';
 import '../widgets/card_fan_overlay.dart';
 import '../widgets/chrome.dart';
 import '../widgets/dice_roll_overlay.dart';
+import '../widgets/game_end_overlay.dart';
+import '../widgets/match_point_overlay.dart';
+import '../widgets/resource_icon.dart';
 import '../widgets/settings_overlay.dart';
 import '../widgets/shop_overlay.dart';
+import '../widgets/task_reveal_overlay.dart';
 import '../widgets/trade_overlay.dart';
 import '../widgets/production_overlay.dart';
 import '../widgets/tile_inspector.dart';
@@ -36,6 +42,18 @@ class GameScreen extends StatefulWidget {
 /// Free band kept under the board: the grid sits high and the strip below
 /// it stays clear for the bottom chrome.
 const double _boardBottomReserve = 282;
+
+/// How near the victory target counts as match point: within this many
+/// points, a player is called out and their score chip goes crimson.
+const int _matchPointRange = 3;
+
+/// How many points short of victory [playerId] stands while inside match
+/// point range, else null. Live scores only - the secret-objective bonus is
+/// nobody's business until the game ends.
+int? _matchPointStep(GameState state, int playerId) {
+  final away = state.targetVp - scoreFor(state, playerId);
+  return away >= 1 && away <= _matchPointRange ? away : null;
+}
 
 class _GameScreenState extends State<GameScreen> {
   Hex? _selected;
@@ -70,6 +88,23 @@ class _GameScreenState extends State<GameScreen> {
   (String, Color)? _turnSplash;
   Completer<void>? _turnSplashCompleter;
 
+  /// Match-point warning on screen: (line, player color).
+  (String, Color)? _matchPointWarning;
+  Completer<void>? _matchPointCompleter;
+
+  /// Closest proximity step already called out per player, so each step
+  /// toward the target is announced once. Per screen, hence per game: a new
+  /// game builds a new GameScreen.
+  final Map<int, int> _announcedProximity = {};
+
+  /// Game-end beat held over the board before the scoreboard: (line, whether
+  /// it is your win to celebrate). Null once it has played.
+  (String, bool)? _endMoment;
+
+  /// Defensive: a screen that somehow mounts on a finished game skips the
+  /// beat and goes straight to the scoreboard.
+  bool _skipEndMoment = false;
+
   /// Board canvas size from the last layout, for overlay positioning.
   Size _boardSize = Size.zero;
 
@@ -89,9 +124,17 @@ class _GameScreenState extends State<GameScreen> {
     super.initState();
     controller.addListener(_onStateChanged);
     controller.eventDelegate = _presentEvents;
+    SoundStore.instance.startMusic(MusicTrack.game);
     SharedPreferences.getInstance().then((prefs) {
       if (mounted) setState(() => _tipsOn = prefs.getBool('tips_on') ?? true);
     });
+    _skipEndMoment = state.phase == Phase.gameOver;
+    // Seeded from the state we were handed: a resumed game only calls out
+    // the steps this screen actually watches happen.
+    for (final p in state.players) {
+      final step = _matchPointStep(state, p.id);
+      if (step != null) _announcedProximity[p.id] = step;
+    }
     final fresh = state.round == 1 &&
         state.diceHistory.isEmpty &&
         controller.isHumanTurn;
@@ -106,17 +149,21 @@ class _GameScreenState extends State<GameScreen> {
   /// Whether the card fan is on screen (game-start reveal or icon tap).
   bool _cardFanOpen = false;
 
-  /// Second line under the fan title; only the game-start reveal sets it.
-  String? _fanSubtitle;
+  /// Game-start secret-task reveal: armed when the welcome card is
+  /// dismissed, and it runs once the opening card fan is out of the way.
+  bool _taskRevealPending = false;
+  bool _taskRevealActive = false;
 
   /// Landmark shop, bank trade, and settings overlays.
   bool _shopOpen = false;
   bool _tradeOpen = false;
   bool _settingsOpen = false;
 
-  /// Anchors for the fan's fly-to-icon animation.
+  /// Anchors for the fan's fly-to-icon animation and the task reveal's
+  /// fly-to-chip one.
   final GlobalKey _screenStackKey = GlobalKey();
   final GlobalKey _cardIconKey = GlobalKey();
+  final GlobalKey _taskChipKey = GlobalKey();
 
   /// Icon center relative to screen center: where the fan shrinks to.
   Offset _fanFlyOffset() {
@@ -135,18 +182,32 @@ class _GameScreenState extends State<GameScreen> {
     return iconCenter - stackBox.size.center(Offset.zero);
   }
 
+  /// Task chip center in the root stack's space: where the reveal lands.
+  Offset _taskFlyTarget() {
+    final stackBox =
+        _screenStackKey.currentContext?.findRenderObject() as RenderBox?;
+    final chipBox =
+        _taskChipKey.currentContext?.findRenderObject() as RenderBox?;
+    if (stackBox == null || chipBox == null || !chipBox.hasSize) {
+      final size = MediaQuery.sizeOf(context);
+      return Offset(size.width * 0.22, size.height - 150);
+    }
+    return chipBox.localToGlobal(
+      chipBox.size.center(Offset.zero),
+      ancestor: stackBox,
+    );
+  }
+
   void _dismissWelcome() {
     setState(() {
       _showWelcome = false;
       _hudVisible = true;
       final human = state.players.firstWhere((p) => !p.isBot);
       _cardFanOpen = human.hand.isNotEmpty;
-      // The opening reveal restates the secret task: the welcome card is
-      // already gone by the time the cards are in view.
-      final objective = objectiveCatalog[human.objectiveId];
-      _fanSubtitle = objective == null
-          ? null
-          : '🎯 Secret task: ${objective.description}';
+      // The task reveal queues behind the fan - one ceremony at a time - so
+      // it only arms when there is a fan to dismiss.
+      _taskRevealPending =
+          _cardFanOpen && objectiveCatalog[human.objectiveId] != null;
     });
   }
 
@@ -245,6 +306,7 @@ class _GameScreenState extends State<GameScreen> {
       // dice ceremony so late rounds stop dragging.
       final boardFull = state.tiles.values.every((t) => t.ownerId != null);
       final completer = Completer<void>();
+      SoundStore.instance.playSfx(Sfx.diceRoll);
       setState(() {
         _rollingDice = (roll.d1, roll.d2);
         _rollDuration = Duration(
@@ -279,6 +341,7 @@ class _GameScreenState extends State<GameScreen> {
             : 'No hex is numbered $label';
       }
       final completer = Completer<void>();
+      SoundStore.instance.playSfx(Sfx.production);
       setState(() {
         _production = (grants, emptyMessage, const []);
         _productionCompleter = completer;
@@ -316,6 +379,8 @@ class _GameScreenState extends State<GameScreen> {
       await completer.future;
     }
     if (!mounted) return;
+    await _announceMatchPoint();
+    if (!mounted) return;
     // Hand-over beat: name whoever is up next before their play animates.
     final turnEnded = events.whereType<TurnEnded>().firstOrNull;
     if (turnEnded != null && state.phase != Phase.gameOver) {
@@ -334,11 +399,37 @@ class _GameScreenState extends State<GameScreen> {
     final banditPlacements = events.whereType<BanditPlaced>();
     if (banditPlacements.isNotEmpty && _boardSize != Size.zero) {
       final completer = Completer<void>();
+      SoundStore.instance.playSfx(Sfx.bandit);
       setState(() {
         _banditFlyTarget = banditPlacements.first.target;
         _banditCompleter = completer;
       });
       await completer.future;
+    }
+  }
+
+  /// Calls out every player who just moved a step closer to the target, one
+  /// banner each. Silent once the game is over: that moment has its own.
+  Future<void> _announceMatchPoint() async {
+    if (state.phase == Phase.gameOver) return;
+    for (final p in state.players) {
+      final step = _matchPointStep(state, p.id);
+      if (step == null) continue;
+      final announced = _announcedProximity[p.id];
+      if (announced != null && announced <= step) continue;
+      _announcedProximity[p.id] = step;
+      final completer = Completer<void>();
+      SoundStore.instance.playSfx(Sfx.matchPoint);
+      setState(() {
+        _matchPointWarning = (
+          '${p.isBot ? '${p.name} is' : 'You are'} $step '
+              'point${step == 1 ? '' : 's'} from victory!',
+          BoardPainter.playerColors[p.id],
+        );
+        _matchPointCompleter = completer;
+      });
+      await completer.future;
+      if (!mounted) return;
     }
   }
 
@@ -382,6 +473,16 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
+  void _onMatchPointShown() {
+    _matchPointCompleter?.complete();
+    if (mounted) {
+      setState(() {
+        _matchPointWarning = null;
+        _matchPointCompleter = null;
+      });
+    }
+  }
+
   void _onBanditLanded() {
     _banditCompleter?.complete();
     if (mounted) {
@@ -395,19 +496,56 @@ class _GameScreenState extends State<GameScreen> {
   void _onStateChanged() {
     if (!mounted) return;
     setState(() {});
-    if (controller.state?.phase == Phase.gameOver && !_navigatedToGameOver) {
+    final finished = controller.state;
+    if (finished?.phase == Phase.gameOver && !_navigatedToGameOver) {
       _navigatedToGameOver = true;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => GameOverScreen(controller: controller),
-        ),
-      );
+      if (_skipEndMoment) {
+        _goToGameOver();
+        return;
+      }
+      // The engine only reports who won, so the winner's live score is what
+      // tells a claimed target from a game the seasons ran out on.
+      final winnerId = finished!.winnerId;
+      final claimed = winnerId != null &&
+          scoreFor(finished, winnerId) >= finished.targetVp;
+      final humanWon = winnerId != null && !finished.players[winnerId].isBot;
+      SoundStore.instance.playSfx(humanWon ? Sfx.victory : Sfx.defeat);
+      setState(() => _endMoment = (
+            claimed ? 'The realm is claimed!' : 'The seasons have turned.',
+            humanWon,
+          ));
+    }
+  }
+
+  void _goToGameOver() {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => GameOverScreen(controller: controller),
+      ),
+    );
+  }
+
+  /// One-shot for the move the player just committed. Fired ahead of the
+  /// dispatch, not after it: dispatch awaits the whole ceremony chain (and the
+  /// bot turns behind it), so a sound queued after it would land beats late.
+  /// The legality check is the same one dispatch would make.
+  void _playActionSound(GameAction action) {
+    final sfx = switch (action) {
+      PlayCard() => Sfx.cardPlay,
+      // A seize is a hostile claim - same stake-in-the-ground sound.
+      ClaimHex() || SeizeHex() => Sfx.claim,
+      UpgradeHex() => Sfx.upgrade,
+      _ => null,
+    };
+    if (sfx != null && legalActions(state).contains(action)) {
+      SoundStore.instance.playSfx(sfx);
     }
   }
 
   Future<void> _tryDispatch(GameAction action) async {
     try {
       _selected = null;
+      _playActionSound(action);
       await controller.dispatch(action);
     } on IllegalActionException catch (e) {
       if (!mounted) return;
@@ -442,7 +580,8 @@ class _GameScreenState extends State<GameScreen> {
       _banditFlyTarget != null ||
       _production != null ||
       _botCardPlay != null ||
-      _turnSplash != null;
+      _turnSplash != null ||
+      _matchPointWarning != null;
 
   /// Crimson glow: rival hexes you could seize right now.
   Set<Hex> get _seizeHighlighted {
@@ -498,26 +637,22 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Future<void> _confirmSeize(SeizeHex action) async {
-    const emoji = {
-      Resource.wood: '🪵',
-      Resource.grain: '🌾',
-      Resource.brick: '🧱',
-      Resource.stone: '🪨',
-    };
     final tile = state.tiles[action.target]!;
     final victim = state.players[tile.ownerId!];
     final counts = <Resource, int>{};
     for (final r in action.spend) {
       counts[r] = (counts[r] ?? 0) + 1;
     }
-    final costText =
-        counts.entries.map((e) => '${e.value} ${emoji[e.key]}').join('  ');
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text('Seize from ${victim.name}?'),
-        content: Text(
-            'Take their Level-${tile.level} hex for:\n\n$costText'),
+        content: Text.rich(
+          TextSpan(children: [
+            TextSpan(text: 'Take their Level-${tile.level} hex for:\n\n'),
+            ...costSpans(counts, 14, countFirst: true, separator: '  '),
+          ]),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -700,6 +835,11 @@ class _GameScreenState extends State<GameScreen> {
                             shopGlow: shopGlow,
                             tradeGlow: tradeGlow,
                             cardIconKey: _cardIconKey,
+                            taskChipKey: _taskChipKey,
+                            // Hidden but still laid out: the reveal flies to
+                            // the chip's spot and only then uncovers it.
+                            taskHidden:
+                                _taskRevealPending || _taskRevealActive,
                             pendingCardId: _pendingCardId,
                             onCancelPending: () =>
                                 setState(() => _pendingCardId = null),
@@ -781,6 +921,13 @@ class _GameScreenState extends State<GameScreen> {
                         playerColor: _turnSplash!.$2,
                         onDone: _onTurnSplashShown,
                       ),
+                    if (_matchPointWarning != null)
+                      MatchPointOverlay(
+                        key: ValueKey(_matchPointWarning),
+                        text: _matchPointWarning!.$1,
+                        playerColor: _matchPointWarning!.$2,
+                        onDone: _onMatchPointShown,
+                      ),
                     if (_banditFlyTarget != null)
                       Positioned(
                         left: 0,
@@ -816,7 +963,6 @@ class _GameScreenState extends State<GameScreen> {
           if (_cardFanOpen)
             CardFanOverlay(
               cardIds: human.hand,
-              subtitle: _fanSubtitle,
               flyOffset: _fanFlyOffset(),
               playableCardIds: controller.isHumanTurn
                   ? legalActions(state)
@@ -834,8 +980,17 @@ class _GameScreenState extends State<GameScreen> {
               onPlay: _handleCardPlay,
               onDone: () => setState(() {
                 _cardFanOpen = false;
-                _fanSubtitle = null;
+                if (_taskRevealPending) {
+                  _taskRevealPending = false;
+                  _taskRevealActive = true;
+                }
               }),
+            ),
+          if (_taskRevealActive && objectiveCatalog[human.objectiveId] != null)
+            TaskRevealOverlay(
+              description: objectiveCatalog[human.objectiveId]!.description,
+              target: _taskFlyTarget(),
+              onDone: () => setState(() => _taskRevealActive = false),
             ),
           if (_shopOpen)
             ShopOverlay(
@@ -853,8 +1008,10 @@ class _GameScreenState extends State<GameScreen> {
           if (_settingsOpen)
             SettingsOverlay(
               onClose: () => setState(() => _settingsOpen = false),
-              onQuitToMenu: () =>
-                  Navigator.of(context).popUntil((r) => r.isFirst),
+              onQuitToMenu: () {
+                SoundStore.instance.startMusic(MusicTrack.menu);
+                Navigator.of(context).popUntil((r) => r.isFirst);
+              },
             ),
           if (_tradeOpen)
             TradeOverlay(
@@ -863,6 +1020,17 @@ class _GameScreenState extends State<GameScreen> {
                   legalActions(state).whereType<BankTrade>().toList(),
               onTrade: _tryDispatch,
               onClose: () => setState(() => _tradeOpen = false),
+            ),
+          // The last ceremony of all: it paints over every other overlay and
+          // hands off to the scoreboard when it ends.
+          if (_endMoment != null)
+            GameEndOverlay(
+              text: _endMoment!.$1,
+              celebrate: _endMoment!.$2,
+              onDone: () {
+                setState(() => _endMoment = null);
+                _goToGameOver();
+              },
             ),
         ],
       ),
@@ -954,12 +1122,8 @@ class _TopLeftChrome extends StatelessWidget {
     required this.onOpenSettings,
   });
 
-  static const resourceEmoji = {
-    Resource.wood: '🪵',
-    Resource.grain: '🌾',
-    Resource.brick: '🧱',
-    Resource.stone: '🪨',
-  };
+  /// The counters, icons included, render at this size.
+  static const _fontSize = 15.0;
 
   @override
   Widget build(BuildContext context) {
@@ -984,10 +1148,13 @@ class _TopLeftChrome extends StatelessWidget {
                     Padding(
                       padding: EdgeInsets.only(
                           right: r == Resource.values.last ? 0 : 10),
-                      child: Text(
-                        '${resourceEmoji[r]} ${human.countOf(r)}',
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 15),
+                      child: Text.rich(
+                        TextSpan(children: [
+                          resourceSpan(r, _fontSize),
+                          TextSpan(text: ' ${human.countOf(r)}'),
+                        ]),
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: _fontSize),
                       ),
                     ),
                 ],
@@ -1091,30 +1258,117 @@ class _TopRightChrome extends StatelessWidget {
         for (final p in state.players)
           Padding(
             padding: const EdgeInsets.only(bottom: 4),
-            child: _playerChip(p),
+            child: _PlayerChip(
+              label: '${p.isBot ? p.name.substring(0, 1) : 'You'} '
+                  '${scoreFor(state, p.id)}',
+              color: BoardPainter.playerColors[p.id],
+              active: state.currentPlayerIndex == p.id,
+              matchPointStep: _matchPointStep(state, p.id),
+            ),
           ),
       ],
     );
   }
+}
 
-  Widget _playerChip(PlayerState p) {
-    final active = state.currentPlayerIndex == p.id;
-    final color = BoardPainter.playerColors[p.id];
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: active ? color : Colors.black.withValues(alpha: 0.35),
-        border: Border.all(color: color, width: 1.5),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        '${p.isBot ? p.name.substring(0, 1) : 'You'} ${scoreFor(state, p.id)}',
-        style: TextStyle(
-          color: active ? Colors.white : Colors.white70,
-          fontWeight: active ? FontWeight.w800 : FontWeight.w500,
-          fontSize: 13,
-        ),
-      ),
+/// One score chip. Within match point range it keeps a crimson border and
+/// breathes for a few beats. Bounded, not a repeat(): a forever-running
+/// controller would keep widget tests from ever settling.
+class _PlayerChip extends StatefulWidget {
+  final String label;
+  final Color color;
+  final bool active;
+
+  /// Points short of victory while inside the warning range, else null.
+  final int? matchPointStep;
+
+  const _PlayerChip({
+    required this.label,
+    required this.color,
+    required this.active,
+    required this.matchPointStep,
+  });
+
+  @override
+  State<_PlayerChip> createState() => _PlayerChipState();
+}
+
+class _PlayerChipState extends State<_PlayerChip>
+    with SingleTickerProviderStateMixin {
+  /// The crimson the board uses for seizable hexes - one warning color.
+  static const _warning = Color(0xFFE05252);
+  static const _beats = 3;
+
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 800 * _beats),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.matchPointStep != null) _pulse.forward();
+  }
+
+  @override
+  void didUpdateWidget(_PlayerChip old) {
+    super.didUpdateWidget(old);
+    // Every step closer breathes again; sitting on the same step does not.
+    if (widget.matchPointStep != null &&
+        widget.matchPointStep != old.matchPointStep) {
+      _pulse.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final atMatchPoint = widget.matchPointStep != null;
+    return AnimatedBuilder(
+      animation: _pulse,
+      builder: (context, _) {
+        // Full cosine beats: the border starts and ends bright, dipping
+        // between, so the resting chip is never caught mid-fade.
+        final beat = atMatchPoint
+            ? 0.5 + 0.5 * cos(_pulse.value * 2 * pi * _beats)
+            : 1.0;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: widget.active
+                ? widget.color
+                : Colors.black.withValues(alpha: 0.35),
+            border: Border.all(
+              color: atMatchPoint
+                  ? _warning.withValues(alpha: 0.45 + 0.55 * beat)
+                  : widget.color,
+              width: atMatchPoint ? 2 : 1.5,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: atMatchPoint
+                ? [
+                    BoxShadow(
+                      color: _warning.withValues(alpha: 0.35 * beat),
+                      blurRadius: 8,
+                    ),
+                  ]
+                : null,
+          ),
+          child: Text(
+            widget.label,
+            style: TextStyle(
+              color: widget.active ? Colors.white : Colors.white70,
+              fontWeight: widget.active ? FontWeight.w800 : FontWeight.w500,
+              fontSize: 13,
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -1131,6 +1385,11 @@ class _BottomCluster extends StatelessWidget {
   final bool shopGlow;
   final bool tradeGlow;
   final GlobalKey? cardIconKey;
+
+  /// Anchor for the game-start task reveal's flight, and whether that reveal
+  /// is still holding the task line for itself.
+  final GlobalKey? taskChipKey;
+  final bool taskHidden;
 
   /// Card waiting for a tile tap; its banner rides above the cluster.
   final String? pendingCardId;
@@ -1159,6 +1418,8 @@ class _BottomCluster extends StatelessWidget {
     required this.upgradeEnabled,
     required this.onUpgrade,
     this.cardIconKey,
+    this.taskChipKey,
+    this.taskHidden = false,
   });
 
   /// Shared size for the hand/shop/trade trio so they read as one family.
@@ -1288,21 +1549,33 @@ class _BottomCluster extends StatelessWidget {
     if (objective == null) return const SizedBox(height: _buttonSize);
     final (current, target) = objective.progress(state, human.id);
     final done = current >= target;
-    return Tooltip(
-      message: objective.description,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: chromePill(),
-        child: Text(
-          '🎯 ${done ? target : current}/$target ${objective.shortLabel}'
-          '${done ? ' ✓' : ''}',
-          maxLines: 1,
-          softWrap: false,
-          overflow: TextOverflow.visible,
-          style: TextStyle(
-            color: done ? const Color(0xFFFFCA28) : Colors.white70,
-            fontSize: 14,
-            fontWeight: done ? FontWeight.w700 : FontWeight.w500,
+    return Visibility(
+      visible: !taskHidden,
+      maintainSize: true,
+      maintainAnimation: true,
+      maintainState: true,
+      child: Tooltip(
+        message: objective.description,
+        child: Container(
+          key: taskChipKey,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: chromePill(),
+          child: Text.rich(
+            TextSpan(children: [
+              taskSpan(14),
+              TextSpan(
+                text: ' ${done ? target : current}/$target '
+                    '${objective.shortLabel}${done ? ' ✓' : ''}',
+              ),
+            ]),
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.visible,
+            style: TextStyle(
+              color: done ? const Color(0xFFFFCA28) : Colors.white70,
+              fontSize: 14,
+              fontWeight: done ? FontWeight.w700 : FontWeight.w500,
+            ),
           ),
         ),
       ),

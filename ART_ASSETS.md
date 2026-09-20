@@ -111,17 +111,8 @@ All 256x256, `landmarks/lm_<id>.png`:
 
 | File | Size | Subject |
 |---|---|---|
-| `resources/wood.png` `grain.png` `brick.png` `stone.png` | 128x128 | SKIPPED - icons: stacked logs / wheat sheaf / clay bricks / stone blocks (for the HUD) |
 | `cards/art_<card_id>.png` x10 | 384x384 | DONE - see the subject list below |
 | `ui/panel_bg.png` | 256x256 | parchment panel with darkened wood border (9-slice) |
-
-Resource icons - why SKIPPED: the HUD renders resources as emoji at
-`fontSize: 15` (`lib/screens/game_screen.dart`, `_HudBar.resourceEmoji`),
-and custom icons simply do not read at that size. Every generated
-candidate also collided with the palette itself - brick against
-terracotta, stone against slate blue - so the icons blurred into their
-own chips. Worth revisiting only if the HUD is restructured to render
-icons at ~28-32px.
 
 Card arts - how they are used: each one shows as a 0.18-opacity watermark
 bleeding off the bottom-right of the card face (`ActionCardFace` in
@@ -154,6 +145,50 @@ Prefix used, palette deliberately scoped to the scene so it cannot bleed
 into the subject: "one single bold subject filling the frame, strong
 readable silhouette, minimal internal detail, no background scene, no
 ground line".
+
+## Priority 5 - text icons (resources and the secret task)
+
+These five replace emoji sitting inline in text - the HUD counters, claim
+and upgrade price tags, the shop cost line, the trade chips, the secret
+task chip - so they render at 14-20px. Wiring is live
+(`lib/widgets/resource_icon.dart`): whichever files land show up on every
+screen at once, anything missing keeps its emoji.
+
+| File | Size | Prompt subject |
+|---|---|---|
+| `resources/wood.png` | 128x128 | a small stack of three cut logs |
+| `resources/grain.png` | 128x128 | a tied golden wheat sheaf |
+| `resources/brick.png` | 128x128 | a small stack of terracotta bricks |
+| `resources/stone.png` | 128x128 | a pile of rounded gray stone blocks |
+| `ui/icon_task.png` | 128x128 | a rolled parchment scroll with a red wax seal |
+
+Use the style prefix verbatim, then append: "one object, bold simple
+silhouette, two or three flat shapes only, no internal detail, icon that
+reads at 16 pixels".
+
+At this size the shape is the whole asset. An earlier batch failed on
+color, not drawing: brick against terracotta and stone against slate blue
+blurred into their own chips, so push each icon clearly lighter or darker
+than the palette midtone. Squint test: downscale to 16px - if it stops
+being nameable, reroll.
+
+## Priority 6 - endgame backgrounds
+
+Two full-bleed backdrops for the scoreboard, one per outcome. Wiring is live
+(`lib/screens/game_over_screen.dart`): whichever file lands shows up under a
+dark top-to-bottom scrim (0.65 -> 0.45), and a missing one leaves the flat
+green background it has today.
+
+| File | Size | Prompt subject |
+|---|---|---|
+| `ui/bg_victory.png` | 1536x2048 | hex-patterned valley at golden sunrise with banners flying from a hilltop keep (no transparency) |
+| `ui/bg_defeat.png` | 1536x2048 | the same valley at cold dusk, empty fields under a grey sky, one lit window (no transparency) |
+
+Like `bg_menu`, drop "centered subject, transparent background" from the
+style prefix - these fill the frame. Keep both dim and low-contrast: the
+scoreboard's white text sits right on top, and the scrim only carries art
+that is already quiet. Compose for the middle third being covered, so put
+the interest near the top and bottom edges.
 
 Already looking good and NOT needing art: dice (drawn), number tokens
 (drawn), card frames (drawn), player colors (drawn).

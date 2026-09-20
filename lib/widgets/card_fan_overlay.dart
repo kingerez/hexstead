@@ -28,10 +28,6 @@ class CardFanOverlay extends StatefulWidget {
   final void Function(String cardId)? onPlay;
   final VoidCallback onDone;
 
-  /// Optional second line under the title - the game-start reveal uses it
-  /// to restate the secret task while the hand is on screen.
-  final String? subtitle;
-
   const CardFanOverlay({
     super.key,
     required this.cardIds,
@@ -41,7 +37,6 @@ class CardFanOverlay extends StatefulWidget {
     this.replaceableCardIds = const {},
     this.onPlay,
     this.onReplace,
-    this.subtitle,
   });
 
   @override
@@ -105,19 +100,7 @@ class _CardFanOverlayState extends State<CardFanOverlay>
                     children: [
                       Opacity(
                         opacity: (1 - flyT).clamp(0.0, 1.0),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const OutlinedTitle('Your cards'),
-                            if (widget.subtitle != null)
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                    top: 6, left: 16, right: 16),
-                                child:
-                                    OutlinedTitle(widget.subtitle!, size: 15),
-                              ),
-                          ],
-                        ),
+                        child: const OutlinedTitle('Your cards'),
                       ),
                       const SizedBox(height: 18),
                       if (widget.cardIds.isEmpty)
@@ -213,6 +196,11 @@ class _CardFanOverlayState extends State<CardFanOverlay>
 /// interactive slots. Shared by the hand fan and the bot-play reveal so a
 /// card always looks the same wherever it appears.
 class ActionCardFace extends StatelessWidget {
+  /// Natural size, margins included - callers that blow a card up need it
+  /// to reserve the right amount of layout space.
+  static const width = 114.0;
+  static const height = 176.0;
+
   final String cardId;
 
   /// Top-right corner slot (the fan's swap icon).
@@ -302,37 +290,39 @@ class ActionCardFace extends StatelessWidget {
 
 /// White title with a dark stroke so it reads over any board colors.
 class OutlinedTitle extends StatelessWidget {
-  final String text;
+  final String? text;
+
+  /// Set instead of [text] when the title carries inline icons.
+  final InlineSpan? span;
   final double size;
 
-  const OutlinedTitle(this.text, {super.key, this.size = 24});
+  const OutlinedTitle(this.text, {super.key, this.size = 24}) : span = null;
+
+  const OutlinedTitle.rich(this.span, {super.key, this.size = 24})
+      : text = null;
 
   @override
   Widget build(BuildContext context) {
     const weight = FontWeight.w800;
+    // Drawn twice: a fat dark stroke under the white fill.
+    Widget layer(TextStyle style) => span != null
+        ? Text.rich(span!, textAlign: TextAlign.center, style: style)
+        : Text(text!, textAlign: TextAlign.center, style: style);
     return Stack(
       children: [
-        Text(
-          text,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: size,
-            fontWeight: weight,
-            foreground: Paint()
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = size * 0.2
-              ..color = Colors.black87,
-          ),
-        ),
-        Text(
-          text,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: size,
-            fontWeight: weight,
-            color: Colors.white,
-          ),
-        ),
+        layer(TextStyle(
+          fontSize: size,
+          fontWeight: weight,
+          foreground: Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = size * 0.2
+            ..color = Colors.black87,
+        )),
+        layer(TextStyle(
+          fontSize: size,
+          fontWeight: weight,
+          color: Colors.white,
+        )),
       ],
     );
   }
