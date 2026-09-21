@@ -17,6 +17,7 @@ import '../widgets/card_fan_overlay.dart';
 import '../widgets/chrome.dart';
 import '../widgets/dice_roll_overlay.dart';
 import '../widgets/game_end_overlay.dart';
+import '../widgets/landmark_badges.dart';
 import '../widgets/match_point_overlay.dart';
 import '../widgets/option_picker_dialog.dart';
 import '../widgets/resource_icon.dart';
@@ -103,6 +104,10 @@ class _GameScreenState extends State<GameScreen> {
   /// Robbery call-out on screen: (line, raider's color).
   (String, Color)? _seizeNotice;
   Completer<void>? _seizeCompleter;
+
+  /// Rival's landmark purchase on screen: (line, builder's color).
+  (String, Color)? _landmarkNotice;
+  Completer<void>? _landmarkCompleter;
 
   /// Secret task just fulfilled, held on screen until the player taps it
   /// away, and whether that call-out has already been made this game.
@@ -199,6 +204,9 @@ class _GameScreenState extends State<GameScreen> {
   bool _shopOpen = false;
   bool _tradeOpen = false;
   bool _settingsOpen = false;
+
+  /// Player whose landmark list is open, from a tap on their score chip.
+  int? _landmarkInspectId;
 
   /// Anchors for the fan's fly-to-icon animation and the task reveal's
   /// fly-to-chip one.
@@ -485,8 +493,25 @@ class _GameScreenState extends State<GameScreen> {
       await completer.future;
       if (!mounted) return;
     }
-    // A seize can push the raider into match point; the robbery is the news
-    // that comes first.
+    // A landmark is permanent power taken off the shelf for good, so a rival
+    // claiming one is worth saying out loud.
+    for (final e in events.whereType<LandmarkPurchased>()) {
+      if (!state.players[e.playerId].isBot) continue; // you watched your buy
+      final completer = Completer<void>();
+      SoundStore.instance.playSfx(Sfx.upgrade);
+      setState(() {
+        _landmarkNotice = (
+          '${state.players[e.playerId].name} built the '
+              '${landmarkCatalog[e.landmarkId]?.name ?? e.landmarkId}!',
+          BoardPainter.playerColors[e.playerId],
+        );
+        _landmarkCompleter = completer;
+      });
+      await completer.future;
+      if (!mounted) return;
+    }
+    // A seize or a purchase can push its player into match point; the deed
+    // is the news that comes first.
     await _announceMatchPoint();
     if (!mounted) return;
     await _announceTaskComplete();
@@ -630,6 +655,16 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
+  void _onLandmarkNoticeShown() {
+    _landmarkCompleter?.complete();
+    if (mounted) {
+      setState(() {
+        _landmarkNotice = null;
+        _landmarkCompleter = null;
+      });
+    }
+  }
+
   void _onTaskCompleteShown() {
     _taskCompleteCompleter?.complete();
     if (mounted) {
@@ -746,6 +781,7 @@ class _GameScreenState extends State<GameScreen> {
       _turnSplash != null ||
       _matchPointWarning != null ||
       _seizeNotice != null ||
+      _landmarkNotice != null ||
       _taskComplete != null;
 
   /// Crimson glow: rival hexes you could seize right now.
@@ -982,7 +1018,13 @@ class _GameScreenState extends State<GameScreen> {
                     Positioned(
                       right: 10,
                       top: 8,
-                      child: _TopRightChrome(state: state),
+                      child: _TopRightChrome(
+                        state: state,
+                        onPlayerTap: (p) {
+                          SoundStore.instance.playSfx(Sfx.uiTap);
+                          setState(() => _landmarkInspectId = p.id);
+                        },
+                      ),
                     ),
                     Positioned(
                       left: 0,
@@ -1127,6 +1169,13 @@ class _GameScreenState extends State<GameScreen> {
                         playerColor: _seizeNotice!.$2,
                         onDone: _onSeizeNoticeShown,
                       ),
+                    if (_landmarkNotice != null)
+                      MatchPointOverlay(
+                        key: ValueKey(_landmarkNotice),
+                        text: _landmarkNotice!.$1,
+                        playerColor: _landmarkNotice!.$2,
+                        onDone: _onLandmarkNoticeShown,
+                      ),
                     if (_banditFlyTarget != null)
                       Positioned(
                         left: 0,
@@ -1250,6 +1299,11 @@ class _GameScreenState extends State<GameScreen> {
                 _tryDispatch(t);
               },
               onClose: () => setState(() => _tradeOpen = false),
+            ),
+          if (_landmarkInspectId != null)
+            LandmarkPopup(
+              player: state.players[_landmarkInspectId!],
+              onClose: () => setState(() => _landmarkInspectId = null),
             ),
           // Modal, so it sits out here over the chrome rather than in the
           // board's box: the game is waiting on the tap that clears it.
@@ -1480,8 +1534,9 @@ class _TopLeftChrome extends StatelessWidget {
 /// stacked under it.
 class _TopRightChrome extends StatelessWidget {
   final GameState state;
+  final void Function(PlayerState) onPlayerTap;
 
-  const _TopRightChrome({required this.state});
+  const _TopRightChrome({required this.state, required this.onPlayerTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1501,12 +1556,20 @@ class _TopRightChrome extends StatelessWidget {
         for (final p in state.players)
           Padding(
             padding: const EdgeInsets.only(bottom: 4),
-            child: _PlayerChip(
-              label: '${p.isBot ? p.name.substring(0, 1) : 'You'} '
-                  '${scoreFor(state, p.id)}',
-              color: BoardPainter.playerColors[p.id],
-              active: state.currentPlayerIndex == p.id,
-              matchPointStep: _matchPointStep(state, p.id),
+            // A chip with nothing built has nothing to show: inert.
+            child: GestureDetector(
+              key: ValueKey('player-chip-${p.id}'),
+              behavior: HitTestBehavior.opaque,
+              onTap: p.landmarkIds.isEmpty ? null : () => onPlayerTap(p),
+              child: _PlayerChip(
+                label: '${p.isBot ? p.name.substring(0, 1) : 'You'} '
+                    '${scoreFor(state, p.id)}',
+                color: BoardPainter.playerColors[p.id],
+                active: state.currentPlayerIndex == p.id,
+                matchPointStep: _matchPointStep(state, p.id),
+                landmarkIds: p.landmarkIds,
+                playerId: p.id,
+              ),
             ),
           ),
       ],
@@ -1525,11 +1588,18 @@ class _PlayerChip extends StatefulWidget {
   /// Points short of victory while inside the warning range, else null.
   final int? matchPointStep;
 
+  /// What this player has built, badged under the label, and whose chip
+  /// this is - the badge row keys itself off the id.
+  final List<String> landmarkIds;
+  final int playerId;
+
   const _PlayerChip({
     required this.label,
     required this.color,
     required this.active,
     required this.matchPointStep,
+    required this.landmarkIds,
+    required this.playerId,
   });
 
   @override
@@ -1602,13 +1672,23 @@ class _PlayerChipState extends State<_PlayerChip>
                   ]
                 : null,
           ),
-          child: Text(
-            widget.label,
-            style: TextStyle(
-              color: widget.active ? Colors.white : Colors.white70,
-              fontWeight: widget.active ? FontWeight.w800 : FontWeight.w500,
-              fontSize: 13,
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                widget.label,
+                style: TextStyle(
+                  color: widget.active ? Colors.white : Colors.white70,
+                  fontWeight: widget.active ? FontWeight.w800 : FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
+              if (widget.landmarkIds.isNotEmpty)
+                LandmarkBadgeRow(
+                  landmarkIds: widget.landmarkIds,
+                  playerId: widget.playerId,
+                ),
+            ],
           ),
         );
       },

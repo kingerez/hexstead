@@ -93,6 +93,8 @@ GameState fixture({
   // Out of reach by default, so scoring never trips the endgame chrome; the
   // match-point tests pull it down within a move or two of the human.
   int targetVp = 99,
+  List<String> humanLandmarks = const [],
+  List<String> botLandmarks = const [],
 }) {
   const tilesSpec = [
     (Hex(0, 0), TerrainType.forest, 8, 0, 1),
@@ -125,8 +127,14 @@ GameState fixture({
         isBot: false,
         resources: resources,
         objectiveId: objectiveId,
+        landmarkIds: humanLandmarks,
       ),
-      const PlayerState(id: 1, name: 'Bot', isBot: true),
+      PlayerState(
+        id: 1,
+        name: 'Bot',
+        isBot: true,
+        landmarkIds: botLandmarks,
+      ),
     ],
     landmarkOffer: landmarkOffer,
     lastDice: (3, 5),
@@ -817,6 +825,102 @@ void main() {
     await tester.pumpAndSettle();
     await shown;
     expect(find.textContaining('seized your hex'), findsNothing);
+  });
+
+  testWidgets('owned landmarks badge the score chip, and only that chip',
+      (tester) async {
+    await pumpResumed(
+      tester,
+      fixture(humanLandmarks: const ['granary', 'trade_post']),
+    );
+
+    final badges = find.byKey(const ValueKey('landmark-badges-0'));
+    expect(badges, findsOneWidget);
+    expect(tester.widget<Text>(badges).data, '🌾⚖️');
+    // The bot has built nothing, so its chip stays a bare score.
+    expect(find.byKey(const ValueKey('landmark-badges-1')), findsNothing);
+  });
+
+  testWidgets('tapping a badged chip opens the landmark list, scrim closes it',
+      (tester) async {
+    await pumpResumed(
+      tester,
+      fixture(humanLandmarks: const ['granary', 'trade_post']),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('player-chip-0')));
+    await tester.pumpAndSettle();
+    expect(find.text('You - Landmarks'), findsOneWidget);
+    expect(find.text('Granary'), findsOneWidget);
+    expect(
+      find.text('Your fields yield +1 grain when they produce.'),
+      findsOneWidget,
+    );
+    expect(find.text('Trade Post'), findsOneWidget);
+
+    // A tap on the scrim, clear of the centred panel.
+    await tester.tapAt(const Offset(10, 300));
+    await tester.pumpAndSettle();
+    expect(find.text('You - Landmarks'), findsNothing);
+  });
+
+  testWidgets('a chip with no landmarks opens nothing', (tester) async {
+    await pumpResumed(tester, fixture());
+
+    await tester.tap(find.byKey(const ValueKey('player-chip-0')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Landmarks'), findsNothing);
+  });
+
+  testWidgets('a bot building a landmark raises a banner, then clears',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final controller = GameController(
+      saveStore: InMemorySaveStore(),
+      botStepDelay: Duration.zero,
+    );
+    await controller.startNewGame(seed: 9, players: const [
+      PlayerSetup(name: 'You', isBot: false),
+      PlayerSetup(name: 'Bot', isBot: true),
+    ]);
+    await tester.pumpWidget(
+      MaterialApp(home: GameScreen(controller: controller)),
+    );
+    await dismissWelcome(tester);
+
+    final shown =
+        controller.eventDelegate!([LandmarkPurchased('high_roller', 1)]);
+    await tester.pump();
+    expect(find.text('Bot built the Gambling Hall!'), findsWidgets);
+
+    await tester.pumpAndSettle();
+    await shown;
+    expect(find.text('Bot built the Gambling Hall!'), findsNothing);
+  });
+
+  testWidgets('building a landmark yourself raises no banner', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final controller = GameController(
+      saveStore: InMemorySaveStore(),
+      botStepDelay: Duration.zero,
+    );
+    await controller.startNewGame(seed: 9, players: const [
+      PlayerSetup(name: 'You', isBot: false),
+      PlayerSetup(name: 'Bot', isBot: true),
+    ]);
+    await tester.pumpWidget(
+      MaterialApp(home: GameScreen(controller: controller)),
+    );
+    await dismissWelcome(tester);
+
+    final shown =
+        controller.eventDelegate!([LandmarkPurchased('high_roller', 0)]);
+    await tester.pump();
+    expect(find.textContaining('built the'), findsNothing);
+
+    await tester.pumpAndSettle();
+    await shown;
+    expect(find.textContaining('built the'), findsNothing);
   });
 
   testWidgets('the game-end moment holds, then the scoreboard takes over',

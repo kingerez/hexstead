@@ -3,6 +3,7 @@ import 'package:hexstead_engine/hexstead_engine.dart';
 
 import '../art/art_store.dart';
 import 'chrome.dart';
+import 'landmark_badges.dart';
 import 'resource_icon.dart';
 
 /// The landmark shop as a 2x2 spread of art cards. Tap outside to close;
@@ -20,22 +21,6 @@ class ShopOverlay extends StatelessWidget {
     required this.onBuy,
     required this.onClose,
   });
-
-  /// Placeholder "art" per landmark until the generated set lands.
-  static const landmarkEmoji = {
-    'high_roller': '🎲',
-    'trade_post': '⚖️',
-    'cheap_claims': '📜',
-    'bandit_ward': '🛡️',
-    'granary': '🌾',
-    'lumber_mill': '🪚',
-    'deep_mine': '⛏️',
-    'kiln': '🔥',
-    'cathedral': '⛪',
-    'market_hall': '🏪',
-    'watchtower': '🗼',
-    'keep': '🏰',
-  };
 
   @override
   Widget build(BuildContext context) {
