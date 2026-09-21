@@ -65,14 +65,21 @@ class MobileAdService implements AdService {
     ad.fullScreenContentCallback = FullScreenContentCallback(
       onAdDismissedFullScreenContent: (ad) {
         ad.dispose();
-        dismissed.complete();
+        if (!dismissed.isCompleted) dismissed.complete();
       },
       onAdFailedToShowFullScreenContent: (ad, error) {
         ad.dispose();
-        dismissed.complete();
+        if (!dismissed.isCompleted) dismissed.complete();
       },
     );
-    await ad.show();
+    try {
+      await ad.show();
+    } catch (_) {
+      // show() can throw on the platform channel (ad disposed, activity
+      // gone) independent of the callbacks above - absorb it, play goes on.
+      ad.dispose();
+      if (!dismissed.isCompleted) dismissed.complete();
+    }
     await dismissed.future;
   }
 }
