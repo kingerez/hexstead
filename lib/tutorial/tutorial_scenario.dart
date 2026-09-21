@@ -23,7 +23,8 @@ class TutorialScenario {
   /// The field Bertram claims on his first turn.
   static const rivalClaim = Hex(0, -2);
 
-  /// The third hex of your King's Road, named in the closing banner.
+  /// The third hex of your King's Road: the claim that fulfils your secret
+  /// task, on the far side of your camp from the hill you took first.
   static const roadFinisher = Hex(-1, 1);
 
   /// Consumption order: you 3+5, Bertram 3+2, you 2+4, Bertram 1+3,
@@ -99,7 +100,10 @@ class TutorialScenario {
             id: 0,
             name: 'You',
             isBot: false,
-            resources: {Resource.wood: 2, Resource.brick: 2},
+            // A wood and a brick over the usual opening purse: the script
+            // spends every coin it is given, and the King's Road lesson
+            // buys a third hex the real opening could not have paid for.
+            resources: {Resource.wood: 3, Resource.brick: 3},
             hand: ['bounty', 'second_chance', 'harvest'],
             objectiveId: 'straight_line',
           ),

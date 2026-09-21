@@ -81,7 +81,9 @@ void main() {
       }
     }
 
-    expect(purse(state, 0), [2, 2, 0, 0]);
+    // A wood and a brick over the standard opening purse: the script needs
+    // them for the King's Road claim, and spends them all.
+    expect(purse(state, 0), [3, 3, 0, 0]);
     expect(purse(state, 1), [2, 2, 0, 0]);
 
     // --- Round 1, you -------------------------------------------------
@@ -89,9 +91,9 @@ void main() {
     expect(state.lastDice, (3, 5));
     play(const ChooseActivation(ActivationMode.sum));
     // Sum 8: your forest camp is the only owned 8.
-    expect(purse(state, 0), [3, 2, 0, 0]);
+    expect(purse(state, 0), [4, 3, 0, 0]);
     play(const ClaimHex(TutorialScenario.claimTarget));
-    expect(purse(state, 0), [2, 1, 0, 0]);
+    expect(purse(state, 0), [3, 2, 0, 0]);
     expect(state.tiles[TutorialScenario.claimTarget]!.ownerId, 0);
     play(const EndTurn());
 
@@ -114,16 +116,16 @@ void main() {
       isTrue,
     );
     play(const ChooseActivation(ActivationMode.split));
-    expect(purse(state, 0), [2, 2, 0, 0]);
+    expect(purse(state, 0), [3, 3, 0, 0]);
     play(const PlayCard('bounty', resource: Resource.grain));
-    expect(purse(state, 0), [2, 2, 2, 0]);
+    expect(purse(state, 0), [3, 3, 2, 0]);
     play(const EndTurn());
 
     // --- Round 2, Bertram ---------------------------------------------
     runBot();
     expect(rolled.last, (1, 3));
     // His 4 pays YOUR hill, and nothing of his.
-    expect(purse(state, 0), [2, 3, 2, 0]);
+    expect(purse(state, 0), [3, 4, 2, 0]);
     expect(purse(state, 1), [1, 1, 1, 0]);
     expect(state.round, 3);
 
@@ -135,12 +137,17 @@ void main() {
     play(const PlaceBandit(TutorialScenario.rivalCamp));
     expect(state.tiles[TutorialScenario.rivalCamp]!.hasBandit, isTrue);
     play(const BuyLandmark('market_hall'));
+    expect(purse(state, 0), [1, 4, 0, 0]);
+    // The third hex of the King's Road, and the purse pays for it exactly.
+    play(const ClaimHex(TutorialScenario.roadFinisher));
     expect(purse(state, 0), [0, 3, 0, 0]);
+    expect(state.tiles[TutorialScenario.roadFinisher]!.ownerId, 0);
     play(const BankTrade(give: Resource.brick, get: Resource.stone));
     expect(purse(state, 0), [0, 0, 0, 1]);
-    // Two territory points plus the landmark - nowhere near the target, so
-    // the tutorial never trips an instant win or a match-point warning.
-    expect(scoreFor(state, 0), 3);
+    // Three territory points plus the landmark - nowhere near the target, so
+    // the tutorial never trips an instant win or a match-point warning. The
+    // secret task's bonus is not among them; it waits for the final tally.
+    expect(scoreFor(state, 0), 4);
     expect(state.targetVp, 15);
     play(const EndTurn());
 
@@ -163,10 +170,10 @@ void main() {
     );
     expect((state.rng as ScriptedRng).remaining, 0);
 
-    // Your King's Road stands at 2 of 3, one hex short.
+    // Your King's Road is finished: three hexes in a line.
     expect(
       objectiveCatalog['straight_line']!.progress(state, 0),
-      (2, 3),
+      (3, 3),
     );
   });
 }

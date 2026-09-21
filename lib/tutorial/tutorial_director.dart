@@ -135,7 +135,7 @@ class TutorialDirector extends ChangeNotifier {
 bool _saw<T extends GameEvent>(List<GameEvent> events) =>
     events.whereType<T>().isNotEmpty;
 
-/// The script. Twenty-five beats from "these are hexes" to "go win one".
+/// The script. Twenty-seven beats from "these are hexes" to "go win one".
 List<TutorialStep> tutorialSteps() => [
       TutorialStep(
         id: 'welcome',
@@ -283,8 +283,25 @@ List<TutorialStep> tutorialSteps() => [
       TutorialStep(
         id: 'objective',
         text: 'Every realm keeps a secret task. Yours is the King\'s Road '
-            '- 3 hexes in a straight line - and you stand at 2.',
+            '- 3 hexes in a straight line - and you hold two of them.',
         targets: const {TutorialTarget.taskChip},
+        showNext: true,
+        advanceOnUi: TutorialUiSignal.next,
+      ),
+      TutorialStep(
+        id: 'objectiveClaim',
+        text: 'The third lies open on the far side of your camp. Tap the '
+            'glowing forest, then press Claim.',
+        highlightHexes: {TutorialScenario.roadFinisher},
+        allows: (a) =>
+            a is ClaimHex && a.target == TutorialScenario.roadFinisher,
+        advanceOnEvents: (events, _) => _saw<HexClaimed>(events),
+      ),
+      TutorialStep(
+        id: 'objectiveDone',
+        text: 'The road is finished. Those bonus points stay off the board '
+            'until the final tally, so keep it quiet and let the others '
+            'guess.',
         showNext: true,
         advanceOnUi: TutorialUiSignal.next,
       ),
@@ -319,9 +336,7 @@ List<TutorialStep> tutorialSteps() => [
         id: 'closing',
         text: 'That is the whole of it. Reach 15 points and the realm is '
             'yours on the spot - else the richest realm wins when round 15 '
-            'turns. The glowing forest would finish your King\'s Road. Go '
-            'and take a realm of your own.',
-        highlightHexes: {TutorialScenario.roadFinisher},
+            'turns. Go and take a realm of your own.',
         showNext: true,
         advanceOnUi: TutorialUiSignal.next,
       ),

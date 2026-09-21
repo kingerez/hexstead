@@ -8,6 +8,7 @@ import 'package:hexstead/state/persistence.dart';
 import 'package:hexstead/tutorial/tutorial_director.dart';
 import 'package:hexstead/tutorial/tutorial_scenario.dart';
 import 'package:hexstead/widgets/card_fan_overlay.dart';
+import 'package:hexstead/widgets/task_complete_overlay.dart';
 import 'package:hexstead/widgets/trade_overlay.dart';
 import 'package:hexstead/widgets/tutorial_banner.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
@@ -61,7 +62,7 @@ FilledButton buttonFor(WidgetTester tester, String label) =>
     );
 
 void main() {
-  testWidgets('the guided game walks all 25 steps and hands back the menu',
+  testWidgets('the guided game walks all 27 steps and hands back the menu',
       (tester) async {
     final (controller, director) = await pumpTutorial(tester);
     GameState state() => controller.state!;
@@ -114,7 +115,7 @@ void main() {
     expect(buttonFor(tester, 'Sum 8').onPressed, isNotNull);
     await tester.tap(find.text('Sum 8'));
     await tester.pumpAndSettle();
-    expect(state().players[0].countOf(Resource.wood), 3);
+    expect(state().players[0].countOf(Resource.wood), 4);
 
     // --- 6. claim -----------------------------------------------------
     expect(director.current.id, 'claim');
@@ -156,7 +157,7 @@ void main() {
     expect(buttonFor(tester, 'Sum 6').onPressed, isNull);
     await tester.tap(find.text('Split 2 & 4'));
     await tester.pumpAndSettle();
-    expect(state().players[0].countOf(Resource.brick), 2);
+    expect(state().players[0].countOf(Resource.brick), 3);
 
     // --- 11. cardsOpen / 12. cardsPlay --------------------------------
     expect(director.current.id, 'cardsOpen');
@@ -182,7 +183,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(director.current.id, 'roll3');
     // Bertram's 4 paid your hill, not him.
-    expect(state().players[0].countOf(Resource.brick), 3);
+    expect(state().players[0].countOf(Resource.brick), 4);
     expect(state().round, 3);
     await tester.tap(find.text('Roll the dice'));
     await tester.pumpAndSettle();
@@ -219,7 +220,34 @@ void main() {
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
 
-    // --- 21. tradeOpen / 22. trade ------------------------------------
+    // --- 21. objectiveClaim: the third hex of the road ----------------
+    expect(director.current.id, 'objectiveClaim');
+    expect(find.byType(TaskCompleteOverlay), findsNothing);
+    await tester.tapAt(hexCenter(tester, TutorialScenario.roadFinisher));
+    await tester.pumpAndSettle();
+    await tester.tap(claimButton());
+    await tester.pumpAndSettle();
+    expect(state().tiles[TutorialScenario.roadFinisher]!.ownerId, 0);
+
+    // The task's own ceremony plays before the guide turns the page, and
+    // the bonus it promises is nowhere in the live score.
+    expect(find.byType(TaskCompleteOverlay), findsOneWidget);
+    expect(find.text('+3 bonus points at the final tally'), findsOneWidget);
+    expect(scoreFor(state(), 0), 4);
+    expect(director.current.id, 'objectiveClaim');
+    await tester.tap(find.byType(TaskCompleteOverlay));
+    await tester.pumpAndSettle();
+
+    // --- 22. objectiveDone ---------------------------------------------
+    expect(director.current.id, 'objectiveDone');
+    expect(find.textContaining('keep it quiet'), findsOneWidget);
+    // The HUD chip agrees: three of three, and ticked.
+    expect(find.textContaining('3/3 in a line ✓', findRichText: true),
+        findsOneWidget);
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+
+    // --- 23. tradeOpen / 24. trade ------------------------------------
     expect(director.current.id, 'tradeOpen');
     await tester.tap(find.byIcon(Icons.handshake));
     await tester.pumpAndSettle();
@@ -235,12 +263,12 @@ void main() {
     expect(state().players[0].countOf(Resource.brick), 0);
     expect(find.byType(TradeOverlay), findsNothing);
 
-    // --- 23. endTurn3, 24. botBandit ----------------------------------
+    // --- 25. endTurn3, 26. botBandit ----------------------------------
     expect(director.current.id, 'endTurn3');
     await tester.tap(find.text('End Turn'));
     await tester.pumpAndSettle();
 
-    // --- 25. closing --------------------------------------------------
+    // --- 27. closing --------------------------------------------------
     // Reaching here at all proves the bot loop parked on the null brain
     // instead of spinning: pumpAndSettle would never have returned.
     expect(director.current.id, 'closing');
