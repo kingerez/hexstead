@@ -73,3 +73,11 @@ is done.
 - [ ] Buy from a locked chip: chips unlock live, no ad on the next game,
       settings entries gone.
 - [ ] Reinstall + restore purchases: unlocked without paying again.
+
+## Build environment note (iOS)
+
+google_mobile_ads is CocoaPods-only while some transitive deps ship
+SPM-only manifests. This repo builds iOS with Swift Package Manager
+disabled (`flutter config --no-enable-swift-package-manager`), a
+per-machine setting that CI or a new machine must apply before
+`flutter build ios`.
