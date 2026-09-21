@@ -46,6 +46,12 @@ Future<(GameController, TutorialDirector)> pumpTutorial(
   return (controller, director);
 }
 
+/// The inspector's claim button, found by the price tag it wears.
+Finder claimButton() => find.ancestor(
+      of: find.textContaining('Claim for', findRichText: true),
+      matching: find.byType(FilledButton),
+    );
+
 /// The FilledButton wrapping [label] (FilledButton.tonal builds one too).
 FilledButton buttonFor(WidgetTester tester, String label) =>
     tester.widget<FilledButton>(
@@ -89,7 +95,7 @@ void main() {
     expect(find.textContaining('The panel below tells all'), findsOneWidget);
     expect(find.text('Mountain'), findsOneWidget);
     expect(find.textContaining('Rolls 11'), findsOneWidget);
-    expect(find.textContaining('to claim', findRichText: true), findsWidgets);
+    expect(find.text('Unclaimed'), findsOneWidget);
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
 
@@ -121,8 +127,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(state().tiles[const Hex(1, 0)]!.ownerId, isNull);
     expect(director.current.id, 'claim');
+    // Not even the panel filled: the guide's tile is the only live one.
+    expect(find.text('Select a tile to view it'), findsOneWidget);
 
+    // The lesson's hex fills the inspector, and the claim is paid there.
     await tester.tapAt(hexCenter(tester, TutorialScenario.claimTarget));
+    await tester.pumpAndSettle();
+    expect(state().tiles[TutorialScenario.claimTarget]!.ownerId, isNull);
+    expect(director.current.id, 'claim');
+    await tester.tap(claimButton());
     await tester.pumpAndSettle();
     expect(state().tiles[TutorialScenario.claimTarget]!.ownerId, 0);
 

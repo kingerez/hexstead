@@ -177,8 +177,8 @@ List<TutorialStep> tutorialSteps() => [
       ),
       TutorialStep(
         id: 'claim',
-        text: 'Land is how you score. Claim the glowing hill beside your '
-            'camp - 1 wood and 1 brick.',
+        text: 'Land is how you score. Tap the glowing hill beside your camp, '
+            'then press Claim below - 1 wood and 1 brick.',
         highlightHexes: {TutorialScenario.claimTarget},
         allows: (a) =>
             a is ClaimHex && a.target == TutorialScenario.claimTarget,

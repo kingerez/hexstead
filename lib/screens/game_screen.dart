@@ -677,15 +677,17 @@ class _GameScreenState extends State<GameScreen> {
     final actions = _allowed;
     final tutorial = widget.tutorial;
     if (tutorial != null) {
-      // One tile matters per step: the claim, the bandit's mark, or the hex
-      // the inspect lesson asks about. Everything else is a dead tap.
-      if (actions.contains(ClaimHex(hex))) {
-        _tryDispatch(ClaimHex(hex));
-      } else if (actions.contains(PlaceBandit(hex))) {
+      // One tile matters per step: the bandit's mark, the hex the inspect
+      // lesson asks about, or whichever the guide is pointing at - that last
+      // one only fills the panel, where the claim button waits. Everything
+      // else is a dead tap.
+      if (actions.contains(PlaceBandit(hex))) {
         _tryDispatch(PlaceBandit(hex));
       } else if (tutorial.current.inspectHex == hex) {
         _selectForViewing(hex);
         tutorial.notifyHexInspected(hex);
+      } else if (tutorial.current.highlightHexes.contains(hex)) {
+        _selectForViewing(hex == _selected ? null : hex);
       }
       return;
     }
@@ -704,10 +706,6 @@ class _GameScreenState extends State<GameScreen> {
       if (actions.contains(PlaceBandit(hex))) {
         _tryDispatch(PlaceBandit(hex));
       }
-      return;
-    }
-    if (actions.contains(ClaimHex(hex))) {
-      _tryDispatch(ClaimHex(hex));
       return;
     }
     final seize = actions
@@ -956,6 +954,10 @@ class _GameScreenState extends State<GameScreen> {
                                 controller.isHumanTurn &&
                                 allowed.contains(UpgradeHex(_selected!)),
                             onUpgrade: () => _upgradeSelected(_selected!),
+                            claimEnabled: _selected != null &&
+                                controller.isHumanTurn &&
+                                allowed.contains(ClaimHex(_selected!)),
+                            onClaim: () => _tryDispatch(ClaimHex(_selected!)),
                           ),
                         ),
                       ),
@@ -1546,6 +1548,8 @@ class _BottomCluster extends StatelessWidget {
   final int humanPlayerId;
   final bool upgradeEnabled;
   final VoidCallback onUpgrade;
+  final bool claimEnabled;
+  final VoidCallback onClaim;
 
   /// What the player may do right now - the engine's legal moves, or the
   /// tutorial's narrowed slice of them. Buttons enable off this, never off
@@ -1573,6 +1577,8 @@ class _BottomCluster extends StatelessWidget {
     required this.humanPlayerId,
     required this.upgradeEnabled,
     required this.onUpgrade,
+    required this.claimEnabled,
+    required this.onClaim,
     this.cardIconKey,
     this.taskChipKey,
     this.taskHidden = false,
@@ -1612,6 +1618,8 @@ class _BottomCluster extends StatelessWidget {
                 humanPlayerId: humanPlayerId,
                 upgradeEnabled: upgradeEnabled,
                 onUpgrade: onUpgrade,
+                claimEnabled: claimEnabled,
+                onClaim: onClaim,
               ),
               const SizedBox(height: 8),
               if (pendingCardId != null)
@@ -1842,7 +1850,7 @@ class _BottomCluster extends StatelessWidget {
             if (tutorialTargets == null)
               _statusPill(
                 canBuild
-                    ? 'Tap a glowing tile to claim it'
+                    ? 'Tap a glowing tile, then press Claim'
                     : 'Nothing affordable - end your turn',
               ),
             const SizedBox(height: 4),

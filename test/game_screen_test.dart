@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hexstead/board/board_geometry.dart';
 import 'package:hexstead/board/board_widget.dart';
 import 'package:hexstead/screens/game_over_screen.dart';
 import 'package:hexstead/screens/game_screen.dart';
@@ -132,6 +133,18 @@ GameState fixture({
     diceHistory: [(3, 5)],
   );
 }
+
+/// Copied from test/card_target_test.dart: where on screen a hex sits.
+Offset hexCenter(WidgetTester tester, Hex hex) {
+  final rect = tester.getRect(find.byType(BoardWidget));
+  return rect.topLeft + BoardGeometry(rect.size).centerOf(hex);
+}
+
+/// The inspector's claim button, found by the price tag it wears.
+Finder claimButton() => find.ancestor(
+      of: find.textContaining('Claim for', findRichText: true),
+      matching: find.byType(FilledButton),
+    );
 
 Future<GameController> pumpResumed(WidgetTester tester, GameState s) async {
   SharedPreferences.setMockInitialValues({});
@@ -449,6 +462,93 @@ void main() {
     final button =
         tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Upgrade'));
     expect(button.onPressed, isNull);
+  });
+
+  testWidgets('tapping an unclaimed hex selects it instead of claiming it',
+      (tester) async {
+    final controller = await pumpResumed(
+      tester,
+      fixture(resources: const {Resource.wood: 1, Resource.brick: 1}),
+    );
+
+    await tester.tapAt(hexCenter(tester, const Hex(1, -1)));
+    await tester.pumpAndSettle();
+
+    // The tap only fills the panel; the land is still nobody's.
+    expect(controller.state!.tiles[const Hex(1, -1)]!.ownerId, isNull);
+    expect(find.text('Mountain'), findsOneWidget);
+    expect(find.text('Unclaimed'), findsOneWidget);
+    expect(claimButton(), findsOneWidget);
+  });
+
+  testWidgets('the inspector Claim button claims the selected hex',
+      (tester) async {
+    final controller = await pumpResumed(
+      tester,
+      fixture(resources: const {Resource.wood: 1, Resource.brick: 1}),
+    );
+
+    await tester.tapAt(hexCenter(tester, const Hex(1, -1)));
+    await tester.pumpAndSettle();
+    await tester.tap(claimButton());
+    await tester.pumpAndSettle();
+
+    expect(controller.state!.tiles[const Hex(1, -1)]!.ownerId, 0);
+    expect(controller.state!.players.first.countOf(Resource.wood), 0);
+    expect(claimButton(), findsNothing);
+  });
+
+  testWidgets('no Claim button when the price is out of reach',
+      (tester) async {
+    await pumpResumed(tester, fixture(resources: const {Resource.wood: 1}));
+
+    await tester.tapAt(hexCenter(tester, const Hex(1, -1)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Unclaimed'), findsOneWidget);
+    expect(claimButton(), findsNothing);
+  });
+
+  testWidgets('no Claim button on a hex that already has an owner',
+      (tester) async {
+    await pumpResumed(
+      tester,
+      fixture(resources: const {Resource.wood: 1, Resource.brick: 1}),
+    );
+
+    // Hex(0, 1) is the rival's hill.
+    await tester.tapAt(hexCenter(tester, const Hex(0, 1)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Owner: Bot'), findsOneWidget);
+    expect(claimButton(), findsNothing);
+  });
+
+  testWidgets('the panel hides the claim offer when the screen withholds it',
+      (tester) async {
+    final state = fixture(resources: const {Resource.wood: 1,
+      Resource.brick: 1});
+    Widget panel({required bool claimEnabled}) => MaterialApp(
+          home: Scaffold(
+            body: TileInspector(
+              state: state,
+              tile: state.tiles[const Hex(1, -1)],
+              humanPlayerId: 0,
+              upgradeEnabled: false,
+              onUpgrade: () {},
+              claimEnabled: claimEnabled,
+              onClaim: () {},
+            ),
+          ),
+        );
+
+    await tester.pumpWidget(panel(claimEnabled: false));
+    await tester.pumpAndSettle();
+    expect(claimButton(), findsNothing);
+
+    await tester.pumpWidget(panel(claimEnabled: true));
+    await tester.pumpAndSettle();
+    expect(claimButton(), findsOneWidget);
   });
 
   testWidgets('rolling shows the dice animation, then the choice buttons',

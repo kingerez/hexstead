@@ -21,6 +21,12 @@ class TileInspector extends StatelessWidget {
   final bool upgradeEnabled;
   final VoidCallback onUpgrade;
 
+  /// Whether the selected tile can be claimed right now. Unlike the upgrade
+  /// this hides rather than greys: an unclaimed hex you cannot take should
+  /// make no offer at all.
+  final bool claimEnabled;
+  final VoidCallback onClaim;
+
   const TileInspector({
     super.key,
     required this.state,
@@ -28,6 +34,8 @@ class TileInspector extends StatelessWidget {
     required this.humanPlayerId,
     required this.upgradeEnabled,
     required this.onUpgrade,
+    required this.claimEnabled,
+    required this.onClaim,
   });
 
   /// Fixed height: the board above must not shift as tiles are selected.
@@ -84,6 +92,9 @@ class TileInspector extends StatelessWidget {
           if (t != null && t.ownerId == humanPlayerId) ...[
             const SizedBox(width: 8),
             _upgradeBlock(t),
+          ] else if (t != null && claimEnabled) ...[
+            const SizedBox(width: 8),
+            _claimButton(),
           ],
         ],
       ),
@@ -134,14 +145,7 @@ class TileInspector extends StatelessWidget {
             style: _dimStyle,
           )
         else
-          _richLine(
-            [
-              const TextSpan(text: 'Unclaimed · pay '),
-              ..._costSpans(Rules.effectiveClaimCost(_human)),
-              const TextSpan(text: ' to claim'),
-            ],
-            style: _dimStyle,
-          ),
+          _line('Unclaimed', style: _dimStyle),
         if (status != null) _line(status, style: _dimStyle),
       ],
     );
@@ -157,13 +161,23 @@ class TileInspector extends StatelessWidget {
         style: style ?? _lineStyle,
       );
 
-  /// Same line, with inline icons among the words.
-  Widget _richLine(List<InlineSpan> spans, {TextStyle? style}) => Text.rich(
-        TextSpan(children: spans),
-        maxLines: 1,
-        softWrap: false,
-        overflow: TextOverflow.ellipsis,
-        style: style ?? _lineStyle,
+  /// The only way to take land: select the hex on the board, then pay for
+  /// it here. The price rides on the button rather than in the details.
+  Widget _claimButton() => FilledButton(
+        onPressed: onClaim,
+        style: FilledButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          minimumSize: const Size(0, 36),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          textStyle:
+              const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+        child: Text.rich(
+          TextSpan(children: [
+            const TextSpan(text: 'Claim for '),
+            ..._costSpans(Rules.effectiveClaimCost(_human)),
+          ]),
+        ),
       );
 
   Widget _upgradeBlock(Tile t) {
