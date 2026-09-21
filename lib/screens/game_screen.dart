@@ -22,6 +22,7 @@ import '../widgets/option_picker_dialog.dart';
 import '../widgets/resource_icon.dart';
 import '../widgets/settings_overlay.dart';
 import '../widgets/shop_overlay.dart';
+import '../widgets/task_complete_overlay.dart';
 import '../widgets/task_reveal_overlay.dart';
 import '../widgets/trade_overlay.dart';
 import '../widgets/production_overlay.dart';
@@ -99,6 +100,12 @@ class _GameScreenState extends State<GameScreen> {
   (String, Color)? _matchPointWarning;
   Completer<void>? _matchPointCompleter;
 
+  /// Secret task just fulfilled, held on screen until the player taps it
+  /// away, and whether that call-out has already been made this game.
+  ObjectiveSpec? _taskComplete;
+  Completer<void>? _taskCompleteCompleter;
+  bool _taskAnnounced = false;
+
   /// Closest proximity step already called out per player, so each step
   /// toward the target is announced once. Per screen, hence per game: a new
   /// game builds a new GameScreen.
@@ -126,6 +133,10 @@ class _GameScreenState extends State<GameScreen> {
   GameController get controller => widget.controller;
   GameState get state => controller.state!;
 
+  /// The player at the controls, and the secret task they were dealt.
+  PlayerState get _human => state.players.firstWhere((p) => !p.isBot);
+  ObjectiveSpec? get _humanTask => objectiveCatalog[_human.objectiveId];
+
   /// What the player may actually do right now. Identical to the engine's
   /// [legalActions] in a normal game; in the tutorial the director narrows
   /// it to the one move the current lesson is about. Every button, glow and
@@ -149,6 +160,10 @@ class _GameScreenState extends State<GameScreen> {
       if (mounted) setState(() => _tipsOn = prefs.getBool('tips_on') ?? true);
     });
     _skipEndMoment = state.phase == Phase.gameOver;
+    // Same seeding as the proximity map below: a task already done when this
+    // screen opened was fulfilled off-screen, and is not news. No task at
+    // all reads as announced, so nothing ever fires.
+    _taskAnnounced = _humanTask?.isComplete(state, _human.id) ?? true;
     // Seeded from the state we were handed: a resumed game only calls out
     // the steps this screen actually watches happen.
     for (final p in state.players) {
@@ -448,6 +463,8 @@ class _GameScreenState extends State<GameScreen> {
     if (!mounted) return;
     await _announceMatchPoint();
     if (!mounted) return;
+    await _announceTaskComplete();
+    if (!mounted) return;
     // Hand-over beat: name whoever is up next before their play animates.
     final turnEnded = events.whereType<TurnEnded>().firstOrNull;
     if (turnEnded != null && state.phase != Phase.gameOver) {
@@ -506,6 +523,27 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
+  /// Calls the secret task out the beat it is fulfilled - once a game, and
+  /// only for a crossing this screen watched happen. Silent once the game is
+  /// over: the scoreboard is about to tally the bonus itself.
+  Future<void> _announceTaskComplete() async {
+    if (state.phase == Phase.gameOver) return;
+    final task = _humanTask;
+    if (_taskAnnounced || task == null || !task.isComplete(state, _human.id)) {
+      return;
+    }
+    _taskAnnounced = true;
+    final completer = Completer<void>();
+    // The player's own progress sound, not the payout chime or the victory
+    // horn: this is a quiet, private win.
+    SoundStore.instance.playSfx(Sfx.upgrade);
+    setState(() {
+      _taskComplete = task;
+      _taskCompleteCompleter = completer;
+    });
+    await completer.future;
+  }
+
   void _onDiceSettled() {
     _rollCompleter?.complete();
     if (mounted) {
@@ -552,6 +590,16 @@ class _GameScreenState extends State<GameScreen> {
       setState(() {
         _matchPointWarning = null;
         _matchPointCompleter = null;
+      });
+    }
+  }
+
+  void _onTaskCompleteShown() {
+    _taskCompleteCompleter?.complete();
+    if (mounted) {
+      setState(() {
+        _taskComplete = null;
+        _taskCompleteCompleter = null;
       });
     }
   }
@@ -660,7 +708,8 @@ class _GameScreenState extends State<GameScreen> {
       _production != null ||
       _botCardPlay != null ||
       _turnSplash != null ||
-      _matchPointWarning != null;
+      _matchPointWarning != null ||
+      _taskComplete != null;
 
   /// Crimson glow: rival hexes you could seize right now.
   Set<Hex> get _seizeHighlighted {
@@ -1157,6 +1206,14 @@ class _GameScreenState extends State<GameScreen> {
                 _tryDispatch(t);
               },
               onClose: () => setState(() => _tradeOpen = false),
+            ),
+          // Modal, so it sits out here over the chrome rather than in the
+          // board's box: the game is waiting on the tap that clears it.
+          if (_taskComplete != null)
+            TaskCompleteOverlay(
+              key: ValueKey(_taskComplete!.id),
+              objective: _taskComplete!,
+              onDone: _onTaskCompleteShown,
             ),
           // The last ceremony of all: it paints over every other overlay and
           // hands off to the scoreboard when it ends.
