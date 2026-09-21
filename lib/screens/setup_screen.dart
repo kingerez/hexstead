@@ -3,9 +3,12 @@ import 'package:hexstead_engine/hexstead_engine.dart';
 
 import '../art/art_store.dart';
 import '../audio/sound_store.dart';
+import '../monetization/entitlements.dart';
+import '../monetization/purchase_store.dart';
 import '../state/game_controller.dart';
 import '../state/high_scores.dart';
 import '../widgets/chrome.dart';
+import '../widgets/paywall_dialog.dart';
 import 'game_screen.dart';
 
 class SetupScreen extends StatefulWidget {
@@ -18,10 +21,33 @@ class SetupScreen extends StatefulWidget {
 }
 
 class _SetupScreenState extends State<SetupScreen> {
-  int _botCount = 2;
-  BotDifficulty _difficulty = BotDifficulty.medium;
+  // Free tier starts on its own allowed combination; unlocked players keep
+  // the classic default of a fair 3-player game.
+  late int _botCount = PurchaseStore.instance.isUnlocked ? 2 : 1;
+  late BotDifficulty _difficulty = PurchaseStore.instance.isUnlocked
+      ? BotDifficulty.medium
+      : BotDifficulty.easy;
 
   static const _botNames = ['Rosalind', 'Bertram', 'Wilhelmina'];
+
+  @override
+  void initState() {
+    super.initState();
+    PurchaseStore.instance.addListener(_onPurchaseChanged);
+  }
+
+  @override
+  void dispose() {
+    PurchaseStore.instance.removeListener(_onPurchaseChanged);
+    super.dispose();
+  }
+
+  /// A purchase can land while this screen is up (paywall opened from a
+  /// locked chip) - the locks have to melt away without a rebuild from
+  /// outside.
+  void _onPurchaseChanged() {
+    if (mounted) setState(() {});
+  }
 
   Future<void> _start() async {
     SoundStore.instance.playSfx(Sfx.uiTap);
@@ -132,6 +158,11 @@ class _SetupScreenState extends State<SetupScreen> {
                   _chip(
                     label: count == 1 ? '1 bot' : '$count bots',
                     selected: _botCount == count,
+                    locked: !setupChoiceAllowed(
+                      unlocked: PurchaseStore.instance.isUnlocked,
+                      botCount: count,
+                      difficulty: BotDifficulty.easy,
+                    ),
                     onSelected: () => setState(() => _botCount = count),
                   ),
               ],
@@ -152,6 +183,11 @@ class _SetupScreenState extends State<SetupScreen> {
                   _chip(
                     label: entry.value,
                     selected: _difficulty == entry.key,
+                    locked: !setupChoiceAllowed(
+                      unlocked: PurchaseStore.instance.isUnlocked,
+                      botCount: 1,
+                      difficulty: entry.key,
+                    ),
                     onSelected: () => setState(() => _difficulty = entry.key),
                   ),
               ],
@@ -200,25 +236,43 @@ class _SetupScreenState extends State<SetupScreen> {
   Widget _chip({
     required String label,
     required bool selected,
+    required bool locked,
     required VoidCallback onSelected,
   }) {
     return ChoiceChip(
       selected: selected,
       onSelected: (_) {
         SoundStore.instance.playSfx(Sfx.uiTap);
+        if (locked) {
+          showPaywall(context);
+          return;
+        }
         onSelected();
       },
       showCheckmark: false,
       selectedColor: const Color(0xFF9A6B1F),
       backgroundColor: const Color(0xFFE7D9B8),
       side: const BorderSide(color: Color(0xFF8A6F4D)),
-      label: Text(
-        label,
-        style: TextStyle(
-          fontSize: 15,
-          fontWeight: FontWeight.w700,
-          color: selected ? Colors.white : const Color(0xFF3A2E20),
-        ),
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (locked) ...[
+            const Icon(Icons.lock, size: 14, color: Color(0xFF8A6F4D)),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: selected
+                  ? Colors.white
+                  : locked
+                      ? const Color(0xFF8A7B62)
+                      : const Color(0xFF3A2E20),
+            ),
+          ),
+        ],
       ),
     );
   }
