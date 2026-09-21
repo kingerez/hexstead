@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../audio/sound_store.dart';
+import '../monetization/purchase_store.dart';
+import 'paywall_dialog.dart';
 
 /// In-game settings card: the music and sound toggles (SoundStore owns both
 /// the live state and the stored prefs) and Home, which quits to the menu
@@ -33,6 +35,7 @@ class _SettingsOverlayState extends State<SettingsOverlay> {
   @override
   void initState() {
     super.initState();
+    PurchaseStore.instance.addListener(_onPurchaseChanged);
     // The store is loaded at startup; this only matters when the overlay is
     // built without a full app boot behind it.
     SoundStore.instance.load().then((_) {
@@ -42,6 +45,36 @@ class _SettingsOverlayState extends State<SettingsOverlay> {
         _sounds = SoundStore.instance.sfxEnabled;
       });
     });
+  }
+
+  @override
+  void dispose() {
+    PurchaseStore.instance.removeListener(_onPurchaseChanged);
+    super.dispose();
+  }
+
+  void _onPurchaseChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _restore() async {
+    SoundStore.instance.playSfx(Sfx.uiTap);
+    final restored = await PurchaseStore.instance.restore();
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        content: Text(restored
+            ? 'Purchase restored - enjoy!'
+            : 'No purchase found for this account'),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _confirmQuit() async {
@@ -116,6 +149,20 @@ class _SettingsOverlayState extends State<SettingsOverlay> {
                       setState(() => _sounds = v);
                       SoundStore.instance.setSfxEnabled(v);
                     }),
+                    if (PurchaseStore.instance.purchasesSupported &&
+                        !PurchaseStore.instance.isUnlocked) ...[
+                      TextButton(
+                        onPressed: () {
+                          SoundStore.instance.playSfx(Sfx.uiTap);
+                          showPaywall(context);
+                        },
+                        child: const Text('Unlock full game'),
+                      ),
+                      TextButton(
+                        onPressed: _restore,
+                        child: const Text('Restore purchases'),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     FilledButton.icon(
                       onPressed: _confirmQuit,
