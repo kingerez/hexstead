@@ -12,6 +12,7 @@ dependencies:
     sdk: flutter
   hexstead_engine:
     path: packages/hexstead_engine
+  in_app_purchase: ^3.2.0
   path_provider: ^2.1.4
   shared_preferences: ^2.3.2
 

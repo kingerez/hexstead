@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import 'art/art_store.dart';
 import 'audio/sound_store.dart';
+import 'monetization/purchase_store.dart';
 import 'screens/menu_screen.dart';
 import 'state/game_controller.dart';
 import 'state/persistence.dart';
@@ -16,6 +17,7 @@ Future<void> main() async {
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   await ArtStore.instance.load();
   await SoundStore.instance.load();
+  await PurchaseStore.instance.load();
   runApp(
     HexsteadApp(controller: GameController(saveStore: createSaveStore())),
   );

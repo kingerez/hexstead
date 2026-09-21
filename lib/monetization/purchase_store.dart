@@ -5,7 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'entitlements.dart';
 import 'purchase_gateway.dart';
-import 'purchase_gateway_factory_stub.dart';
+import 'purchase_gateway_factory_stub.dart'
+    if (dart.library.io) 'purchase_gateway_factory_io.dart';
 
 /// Owns the one entitlement: whether the full game is unlocked. Cached in
 /// prefs so offline launches keep the unlock; purchase and restore events
