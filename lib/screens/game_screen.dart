@@ -834,7 +834,7 @@ class _GameScreenState extends State<GameScreen> {
           return 'Claim an amber hex, or select one of yours to upgrade.';
         }
         if (canClaim) {
-          return 'Claim a glowing hex for 1 wood + 1 brick.';
+          return 'Tap a glowing hex and press Claim - 1 wood + 1 brick.';
         }
         if (canUpgrade) {
           return 'Select a hex with a blue ↑, then hit Upgrade below.';

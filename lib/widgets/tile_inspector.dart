@@ -21,9 +21,9 @@ class TileInspector extends StatelessWidget {
   final bool upgradeEnabled;
   final VoidCallback onUpgrade;
 
-  /// Whether the selected tile can be claimed right now. Unlike the upgrade
-  /// this hides rather than greys: an unclaimed hex you cannot take should
-  /// make no offer at all.
+  /// Whether the claim is legal right now (affordable, your turn, main
+  /// phase) - same rule as the upgrade: every unowned hex shows the button
+  /// with its price, greyed out when the claim cannot be made.
   final bool claimEnabled;
   final VoidCallback onClaim;
 
@@ -92,7 +92,7 @@ class TileInspector extends StatelessWidget {
           if (t != null && t.ownerId == humanPlayerId) ...[
             const SizedBox(width: 8),
             _upgradeBlock(t),
-          ] else if (t != null && claimEnabled) ...[
+          ] else if (t != null && t.ownerId == null) ...[
             const SizedBox(width: 8),
             _claimButton(),
           ],
@@ -162,9 +162,10 @@ class TileInspector extends StatelessWidget {
       );
 
   /// The only way to take land: select the hex on the board, then pay for
-  /// it here. The price rides on the button rather than in the details.
+  /// it here. The price rides on the button rather than in the details, so
+  /// it stays on screen even while the claim is out of reach.
   Widget _claimButton() => FilledButton(
-        onPressed: onClaim,
+        onPressed: claimEnabled ? onClaim : null,
         style: FilledButton.styleFrom(
           padding: const EdgeInsets.symmetric(horizontal: 14),
           minimumSize: const Size(0, 36),

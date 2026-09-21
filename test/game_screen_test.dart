@@ -479,6 +479,7 @@ void main() {
     expect(find.text('Mountain'), findsOneWidget);
     expect(find.text('Unclaimed'), findsOneWidget);
     expect(claimButton(), findsOneWidget);
+    expect(tester.widget<FilledButton>(claimButton()).onPressed, isNotNull);
   });
 
   testWidgets('the inspector Claim button claims the selected hex',
@@ -498,15 +499,17 @@ void main() {
     expect(claimButton(), findsNothing);
   });
 
-  testWidgets('no Claim button when the price is out of reach',
+  testWidgets('the Claim button greys out when the price is out of reach',
       (tester) async {
     await pumpResumed(tester, fixture(resources: const {Resource.wood: 1}));
 
     await tester.tapAt(hexCenter(tester, const Hex(1, -1)));
     await tester.pumpAndSettle();
 
+    // The offer stays on screen with its price, dead until it can be paid.
     expect(find.text('Unclaimed'), findsOneWidget);
-    expect(claimButton(), findsNothing);
+    expect(claimButton(), findsOneWidget);
+    expect(tester.widget<FilledButton>(claimButton()).onPressed, isNull);
   });
 
   testWidgets('no Claim button on a hex that already has an owner',
@@ -524,7 +527,7 @@ void main() {
     expect(claimButton(), findsNothing);
   });
 
-  testWidgets('the panel hides the claim offer when the screen withholds it',
+  testWidgets('the panel greys the claim offer when the screen withholds it',
       (tester) async {
     final state = fixture(resources: const {Resource.wood: 1,
       Resource.brick: 1});
@@ -542,13 +545,16 @@ void main() {
           ),
         );
 
+    // Standing in for the states the screen alone knows about - a bot's turn
+    // among them: the button is there either way, live only when told.
     await tester.pumpWidget(panel(claimEnabled: false));
     await tester.pumpAndSettle();
-    expect(claimButton(), findsNothing);
+    expect(claimButton(), findsOneWidget);
+    expect(tester.widget<FilledButton>(claimButton()).onPressed, isNull);
 
     await tester.pumpWidget(panel(claimEnabled: true));
     await tester.pumpAndSettle();
-    expect(claimButton(), findsOneWidget);
+    expect(tester.widget<FilledButton>(claimButton()).onPressed, isNotNull);
   });
 
   testWidgets('rolling shows the dice animation, then the choice buttons',
