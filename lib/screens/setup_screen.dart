@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../art/art_store.dart';
 import '../audio/sound_store.dart';
+import '../monetization/ad_service.dart';
 import '../monetization/entitlements.dart';
 import '../monetization/purchase_store.dart';
 import '../state/game_controller.dart';
@@ -34,6 +36,7 @@ class _SetupScreenState extends State<SetupScreen> {
   void initState() {
     super.initState();
     PurchaseStore.instance.addListener(_onPurchaseChanged);
+    _maybePreloadAd();
   }
 
   @override
@@ -49,6 +52,17 @@ class _SetupScreenState extends State<SetupScreen> {
     if (mounted) setState(() {});
   }
 
+  /// Only fetch ad inventory when it can actually be shown: free player,
+  /// past the first-game grace. Unlocked players never load the SDK's work.
+  Future<void> _maybePreloadAd() async {
+    if (PurchaseStore.instance.isUnlocked) return;
+    final prefs = await SharedPreferences.getInstance();
+    final started = prefs.getInt(gamesStartedKey) ?? 0;
+    if (shouldShowInterstitial(unlocked: false, gamesStartedBefore: started)) {
+      AdService.instance.preload();
+    }
+  }
+
   Future<void> _start() async {
     SoundStore.instance.playSfx(Sfx.uiTap);
     final players = [
@@ -57,6 +71,15 @@ class _SetupScreenState extends State<SetupScreen> {
         PlayerSetup(name: _botNames[i], isBot: true, difficulty: _difficulty),
     ];
     final navigator = Navigator.of(context);
+    final prefs = await SharedPreferences.getInstance();
+    final startedBefore = prefs.getInt(gamesStartedKey) ?? 0;
+    await prefs.setInt(gamesStartedKey, startedBefore + 1);
+    if (shouldShowInterstitial(
+      unlocked: PurchaseStore.instance.isUnlocked,
+      gamesStartedBefore: startedBefore,
+    )) {
+      await AdService.instance.showIfReady();
+    }
     await widget.controller.startNewGame(
       seed: DateTime.now().millisecondsSinceEpoch,
       players: players,
