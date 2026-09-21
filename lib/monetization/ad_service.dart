@@ -1,4 +1,5 @@
-import 'ad_service_factory_stub.dart';
+import 'ad_service_factory_stub.dart'
+    if (dart.library.io) 'ad_service_factory_io.dart';
 
 /// The interstitial seam. The mobile implementation (google_mobile_ads)
 /// arrives via the conditional factory; everywhere else this is a no-op,
