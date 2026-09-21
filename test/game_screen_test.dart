@@ -766,6 +766,59 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets('a bot seizing your hex raises a banner, then clears',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final controller = GameController(
+      saveStore: InMemorySaveStore(),
+      botStepDelay: Duration.zero,
+    );
+    await controller.startNewGame(seed: 9, players: const [
+      PlayerSetup(name: 'You', isBot: false),
+      PlayerSetup(name: 'Bot', isBot: true),
+    ]);
+    await tester.pumpWidget(
+      MaterialApp(home: GameScreen(controller: controller)),
+    );
+    await dismissWelcome(tester);
+
+    // Straight down the presentation channel the controller uses, rather
+    // than playing a whole game out to the one turn a bot can rob you.
+    final hex = controller.state!.tiles.keys.first;
+    final shown = controller.eventDelegate!([HexSeized(hex, 0, 1)]);
+    await tester.pump();
+    expect(find.text('Bot seized your hex!'), findsWidgets);
+
+    await tester.pumpAndSettle();
+    await shown;
+    expect(find.text('Bot seized your hex!'), findsNothing);
+  });
+
+  testWidgets('seizing a bot hex yourself raises no banner', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final controller = GameController(
+      saveStore: InMemorySaveStore(),
+      botStepDelay: Duration.zero,
+    );
+    await controller.startNewGame(seed: 9, players: const [
+      PlayerSetup(name: 'You', isBot: false),
+      PlayerSetup(name: 'Bot', isBot: true),
+    ]);
+    await tester.pumpWidget(
+      MaterialApp(home: GameScreen(controller: controller)),
+    );
+    await dismissWelcome(tester);
+
+    final hex = controller.state!.tiles.keys.first;
+    final shown = controller.eventDelegate!([HexSeized(hex, 1, 0)]);
+    await tester.pump();
+    expect(find.textContaining('seized your hex'), findsNothing);
+
+    await tester.pumpAndSettle();
+    await shown;
+    expect(find.textContaining('seized your hex'), findsNothing);
+  });
+
   testWidgets('the game-end moment holds, then the scoreboard takes over',
       (tester) async {
     // The upgrade takes the human to 4 points, which is this game's target.

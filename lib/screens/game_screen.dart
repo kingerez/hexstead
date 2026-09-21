@@ -100,6 +100,10 @@ class _GameScreenState extends State<GameScreen> {
   (String, Color)? _matchPointWarning;
   Completer<void>? _matchPointCompleter;
 
+  /// Robbery call-out on screen: (line, raider's color).
+  (String, Color)? _seizeNotice;
+  Completer<void>? _seizeCompleter;
+
   /// Secret task just fulfilled, held on screen until the player taps it
   /// away, and whether that call-out has already been made this game.
   ObjectiveSpec? _taskComplete;
@@ -461,6 +465,28 @@ class _GameScreenState extends State<GameScreen> {
       await completer.future;
     }
     if (!mounted) return;
+    // Losing a hex is the one board change that happens to you rather than
+    // by you, and the tile just quietly swaps color - so it gets said out
+    // loud. Only your losses: your own raids you watched yourself make, and
+    // one bot robbing another is between them.
+    for (final seize in events.whereType<HexSeized>()) {
+      final victim = state.players[seize.fromPlayer];
+      if (victim.isBot) continue;
+      final raider = state.players[seize.toPlayer];
+      final completer = Completer<void>();
+      SoundStore.instance.playSfx(Sfx.bandit);
+      setState(() {
+        _seizeNotice = (
+          '${raider.name} seized your hex!',
+          BoardPainter.playerColors[raider.id],
+        );
+        _seizeCompleter = completer;
+      });
+      await completer.future;
+      if (!mounted) return;
+    }
+    // A seize can push the raider into match point; the robbery is the news
+    // that comes first.
     await _announceMatchPoint();
     if (!mounted) return;
     await _announceTaskComplete();
@@ -594,6 +620,16 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
+  void _onSeizeNoticeShown() {
+    _seizeCompleter?.complete();
+    if (mounted) {
+      setState(() {
+        _seizeNotice = null;
+        _seizeCompleter = null;
+      });
+    }
+  }
+
   void _onTaskCompleteShown() {
     _taskCompleteCompleter?.complete();
     if (mounted) {
@@ -709,6 +745,7 @@ class _GameScreenState extends State<GameScreen> {
       _botCardPlay != null ||
       _turnSplash != null ||
       _matchPointWarning != null ||
+      _seizeNotice != null ||
       _taskComplete != null;
 
   /// Crimson glow: rival hexes you could seize right now.
@@ -1082,6 +1119,13 @@ class _GameScreenState extends State<GameScreen> {
                         text: _matchPointWarning!.$1,
                         playerColor: _matchPointWarning!.$2,
                         onDone: _onMatchPointShown,
+                      ),
+                    if (_seizeNotice != null)
+                      MatchPointOverlay(
+                        key: ValueKey(_seizeNotice),
+                        text: _seizeNotice!.$1,
+                        playerColor: _seizeNotice!.$2,
+                        onDone: _onSeizeNoticeShown,
                       ),
                     if (_banditFlyTarget != null)
                       Positioned(
