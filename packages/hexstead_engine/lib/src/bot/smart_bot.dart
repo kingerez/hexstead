@@ -9,6 +9,11 @@ import 'evaluator.dart';
 /// Greedy 1-ply bot: simulate each legal action, score the result, take the
 /// best. Difficulty tiers differ only in noise and attention - the dice are
 /// never touched.
+///
+/// An action that leaves the bot mid-decision (a die-mod card keeps the
+/// phase at `awaitingChoice`; a 7 sends it to `awaitingBandit`) is worthless
+/// to score as-is, so speculation resolves the forced follow-ups greedily
+/// before evaluating - a card play is then worth what it actually buys.
 abstract final class SmartBot {
   static GameAction chooseAction(GameState state) {
     final actions = legalActions(state);
@@ -21,21 +26,81 @@ abstract final class SmartBot {
     var bestValue = double.negativeInfinity;
     for (final (index, action) in actions.indexed) {
       if (_overlooked(state, difficulty, index, actions.length)) continue;
-      final outcome = _speculate(state, action);
+      final outcome = _valueOf(state, action, me, difficulty, 0);
       if (outcome == null) continue;
-      var value = evaluate(
-        outcome,
-        me,
-        includeObjective: difficulty != BotDifficulty.easy,
-        includeRivals: difficulty != BotDifficulty.easy,
-      );
-      value += _noise(state, index) * _noiseAmplitude(difficulty);
+      final value =
+          outcome + _noise(state, index) * _noiseAmplitude(difficulty);
       if (value > bestValue) {
         bestValue = value;
         best = action;
       }
     }
     return best ?? actions.first;
+  }
+
+  /// Chain resolution never runs deeper than card -> activation -> bandit,
+  /// so this only guards against a rule change opening a longer loop.
+  static const _chainDepthCap = 4;
+
+  /// Value of taking [action], with any forced follow-up decision resolved.
+  /// Null when the action turns out to be illegal.
+  static double? _valueOf(GameState state, GameAction action, int me,
+      BotDifficulty difficulty, int depth) {
+    if (action is PlayCard &&
+        action.cardId == 'second_chance' &&
+        state.phase == Phase.awaitingChoice) {
+      return _secondChanceValue(state, action, me, difficulty, depth);
+    }
+    final outcome = _speculate(state, action);
+    if (outcome == null) return null;
+    return _resolveChain(outcome, me, difficulty, depth);
+  }
+
+  /// Score of [state], resolving a decision the bot is still holding.
+  /// Follow-ups are picked greedily by this same value, with no noise and no
+  /// easy-difficulty overlooking: difficulty quirks belong to the choice the
+  /// bot actually announces, not to its imagination.
+  static double _resolveChain(
+      GameState state, int me, BotDifficulty difficulty, int depth) {
+    final pending = (state.phase == Phase.awaitingChoice ||
+            state.phase == Phase.awaitingBandit) &&
+        state.currentPlayerIndex == me;
+    if (pending && depth < _chainDepthCap) {
+      var best = double.negativeInfinity;
+      for (final action in legalActions(state)) {
+        final value = _valueOf(state, action, me, difficulty, depth + 1);
+        if (value != null && value > best) best = value;
+      }
+      if (best.isFinite) return best;
+    }
+    return evaluate(
+      state,
+      me,
+      includeObjective: difficulty != BotDifficulty.easy,
+      includeRivals: difficulty != BotDifficulty.easy,
+    );
+  }
+
+  /// Second Chance scored as an expectation over the 36 dice outcomes. The
+  /// sandbox RNG is a clone of the real one, so its reroll is exactly the one
+  /// the game would produce - using it would make the bot clairvoyant.
+  ///
+  /// Only the 21 unordered pairs are resolved, mixed ones weighted double:
+  /// the card is spent, so no omen can follow, and both sum and split read
+  /// the dice symmetrically - (a, b) and (b, a) resolve identically.
+  static double? _secondChanceValue(GameState state, GameAction action, int me,
+      BotDifficulty difficulty, int depth) {
+    final played = _speculate(state, action);
+    if (played == null) return null;
+    var total = 0.0;
+    for (var low = 1; low <= 6; low++) {
+      for (var high = low; high <= 6; high++) {
+        final rolled = played.copyWith(lastDice: () => (low, high));
+        final value = _resolveChain(rolled, me, difficulty, depth);
+        total += low == high ? value : value * 2;
+      }
+    }
+    return total / 36.0;
   }
 
   /// Applies [action] on a state whose RNG is cloned, so speculation never
@@ -57,11 +122,13 @@ abstract final class SmartBot {
     return _hash(state.seed, state.round * 100 + index) % 3 != 2;
   }
 
+  /// Sized against the eval: a real sum-vs-split gap is a few points, so hard
+  /// bots almost never misread one and medium bots slip only now and then.
   static double _noiseAmplitude(BotDifficulty difficulty) =>
       switch (difficulty) {
         BotDifficulty.easy => 45.0,
-        BotDifficulty.medium => 5.0,
-        BotDifficulty.hard => 0.5,
+        BotDifficulty.medium => 4.0,
+        BotDifficulty.hard => 0.3,
       };
 
   /// Deterministic pseudo-noise in [-1, 1] from the state identity - never

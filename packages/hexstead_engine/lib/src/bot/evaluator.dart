@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import '../model/game_state.dart';
 import '../model/landmarks.dart';
 import '../model/objectives.dart';
@@ -28,21 +26,25 @@ double evaluate(GameState state, int playerId,
     for (final rival in state.players) {
       if (rival.id == playerId) continue;
       value -= _expectedProduction(state, rival.id) * 0.6 * roundsLeft;
+      // A rival's stockpile is next turn's village: denying a fat payout
+      // (sum vs split, bandit placement) has to show up here or the bot
+      // only ever looks at its own pockets.
+      value -= rival.totalResources * 0.3;
     }
   }
 
   // Room to grow: frontier tiles we could claim.
   value += _frontierSize(state, playerId) * 0.4;
 
-  // Resources: useful but with diminishing returns; hoarding is waste.
-  var totalResources = 0;
-  for (final count in player.resources.values) {
-    totalResources += count;
-  }
-  value += math.sqrt(totalResources) * 1.2;
+  // Resources: near-linear while they still buy claims and upgrades, damped
+  // past a full purse so hoarding stops paying.
+  final totalResources = player.totalResources;
+  value += totalResources <= 10
+      ? totalResources * 1.0
+      : 10.0 + (totalResources - 10) * 0.3;
 
-  // Cards are options.
-  value += player.hand.length * 0.8;
+  // Cards are options - dear enough that a card is not spent for scraps.
+  value += player.hand.length * 1.2;
 
   // Secret objective: completed bonus counts as real points.
   if (includeObjective) {
@@ -60,12 +62,6 @@ double evaluate(GameState state, int playerId,
     if (s > bestRival) bestRival = s;
   }
   value -= bestRival * 3.0;
-
-  // Holding the bandit-placement decision is an asset.
-  if (state.phase == Phase.awaitingBandit &&
-      state.currentPlayerIndex == playerId) {
-    value += _banditOpportunity(state, playerId);
-  }
 
   return value;
 }
@@ -103,18 +99,6 @@ int _frontierSize(GameState state, int playerId) {
     }
   }
   return frontier.length;
-}
-
-/// Value of the best bandit placement available to [playerId].
-double _banditOpportunity(GameState state, int playerId) {
-  var best = 0.0;
-  for (final tile in state.tiles.values) {
-    if (tile.ownerId == null || tile.ownerId == playerId) continue;
-    if (state.players[tile.ownerId!].hasLandmark('bandit_ward')) continue;
-    final damage = pipsFor(tile.number ?? 0) * tile.level.toDouble();
-    if (damage > best) best = damage;
-  }
-  return best * 0.5;
 }
 
 /// Ways to roll [number] on 2d6 (0 for off-board numbers).
