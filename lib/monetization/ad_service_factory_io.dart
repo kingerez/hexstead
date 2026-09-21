@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import 'ad_service.dart';
@@ -45,7 +46,8 @@ class MobileAdService implements AdService {
             _ready = ad;
             _loading = false;
           },
-          onAdFailedToLoad: (_) {
+          onAdFailedToLoad: (error) {
+            if (kDebugMode) debugPrint('Interstitial load failed: $error');
             _ready = null;
             _loading = false;
           },
@@ -68,6 +70,7 @@ class MobileAdService implements AdService {
         if (!dismissed.isCompleted) dismissed.complete();
       },
       onAdFailedToShowFullScreenContent: (ad, error) {
+        if (kDebugMode) debugPrint('Interstitial show failed: $error');
         ad.dispose();
         if (!dismissed.isCompleted) dismissed.complete();
       },
@@ -80,6 +83,8 @@ class MobileAdService implements AdService {
       ad.dispose();
       if (!dismissed.isCompleted) dismissed.complete();
     }
-    await dismissed.future;
+    // A lost callback must never strand the player on the setup screen.
+    await dismissed.future
+        .timeout(const Duration(minutes: 2), onTimeout: () {});
   }
 }

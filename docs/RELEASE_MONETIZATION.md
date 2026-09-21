@@ -49,7 +49,7 @@ is done.
 
 - [ ] Create an AdMob account, register both apps (iOS and Android).
 - [ ] Create one Interstitial ad unit per platform.
-- [ ] Swap the ids in code - all four live in two files:
+- [ ] Swap the ids in code - all four live in three files:
       - `lib/monetization/ad_service_factory_io.dart`: both `_adUnitId`
         values (iOS and Android unit ids).
       - `ios/Runner/Info.plist`: `GADApplicationIdentifier`.
@@ -57,6 +57,9 @@ is done.
         `com.google.android.gms.ads.APPLICATION_ID`.
 - [ ] Keep non-personalized requests (`nonPersonalizedAds: true`) unless
       a deliberate ATT/UMP consent flow ships with it.
+- [ ] google_mobile_ads is pinned at ^7.0.0 deliberately - 6.0.0 shares the
+      5.x Gradle bug and 9.x breaks the iOS build (non-modular header);
+      re-test both platforms before any major bump.
 
 ## Web funnel
 

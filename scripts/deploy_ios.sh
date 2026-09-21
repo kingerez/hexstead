@@ -9,6 +9,13 @@
 #  - "Hexstead AppStore" provisioning profile installed
 set -euo pipefail
 
+# google_mobile_ads is CocoaPods-only; SPM must be disabled or the build fails.
+if ! flutter config --list 2>/dev/null | grep -q "enable-swift-package-manager: false"; then
+  echo "ERROR: Swift Package Manager is enabled. Run: flutter config --no-enable-swift-package-manager"
+  echo "See docs/RELEASE_MONETIZATION.md - Build environment note (iOS)."
+  exit 1
+fi
+
 BUILD_NUMBER="${1:?usage: deploy_ios.sh <build-number>}"
 KEY_ID="FU25H9M283"
 ISSUER_ID="0106418d-f931-4867-bccc-22730ea261c0"

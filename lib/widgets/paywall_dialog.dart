@@ -27,6 +27,7 @@ class PaywallDialog extends StatefulWidget {
 class _PaywallDialogState extends State<PaywallDialog> {
   final _store = PurchaseStore.instance;
   String? _restoreMessage;
+  bool _popped = false;
 
   @override
   void initState() {
@@ -43,7 +44,10 @@ class _PaywallDialogState extends State<PaywallDialog> {
   void _onStoreChanged() {
     if (!mounted) return;
     if (_store.isUnlocked) {
-      Navigator.of(context).pop();
+      if (!_popped) {
+        _popped = true;
+        Navigator.of(context).pop();
+      }
       return;
     }
     setState(() {});

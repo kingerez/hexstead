@@ -19,8 +19,8 @@ android {
         applicationId = "com.hexstead.hexstead"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        // google_mobile_ads needs 23; keep Flutter's floor if it ever rises.
-        minSdk = maxOf(flutter.minSdkVersion, 23)
+        // google_mobile_ads 7.x needs 24; keep Flutter's floor if it ever rises.
+        minSdk = maxOf(flutter.minSdkVersion, 24)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

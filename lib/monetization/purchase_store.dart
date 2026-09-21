@@ -64,6 +64,7 @@ class PurchaseStore extends ChangeNotifier {
   }
 
   Future<void> _setUnlocked(bool value) async {
+    if (_unlocked == value) return;
     _unlocked = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(unlockedCacheKey, value);

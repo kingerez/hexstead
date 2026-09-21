@@ -10,7 +10,7 @@ dependencies:
   audioplayers: ^6.8.1
   flutter:
     sdk: flutter
-  google_mobile_ads: ^7.0.0
+  google_mobile_ads: ^7.0.0 # pinned: 6.x has the 5.x Gradle bug, 9.x breaks iOS - see docs/RELEASE_MONETIZATION.md
   hexstead_engine:
     path: packages/hexstead_engine
   in_app_purchase: ^3.2.0
