@@ -122,7 +122,15 @@ class _PaywallDialogState extends State<PaywallDialog> {
             setState(() =>
                 _restoreMessage = 'No purchase found for this account');
           },
-          child: const Text('Restore purchase'),
+          // The app theme is dark; its pale green vanishes on parchment,
+          // so this link wears the panel's own gold.
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFF9A6B1F),
+          ),
+          child: const Text(
+            'Restore purchase',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
         ),
         if (_restoreMessage != null)
           Text(
@@ -131,6 +139,13 @@ class _PaywallDialogState extends State<PaywallDialog> {
             style: const TextStyle(color: Color(0xFF7A6647), fontSize: 13),
           ),
       ];
+
+  // Same parchment-vs-dark-theme clash as the restore link: the store
+  // buttons dress in the panel's wood and gold instead of the theme green.
+  static final ButtonStyle _storeLinkStyle = OutlinedButton.styleFrom(
+    foregroundColor: const Color(0xFF9A6B1F),
+    side: const BorderSide(color: Color(0xFF8A6F4D)),
+  );
 
   List<Widget> _storeLinks() => [
         const Text(
@@ -142,11 +157,13 @@ class _PaywallDialogState extends State<PaywallDialog> {
         const SizedBox(height: 14),
         OutlinedButton(
           onPressed: () => launchUrl(Uri.parse(appStoreUrl)),
+          style: _storeLinkStyle,
           child: const Text('App Store'),
         ),
         const SizedBox(height: 8),
         OutlinedButton(
           onPressed: () => launchUrl(Uri.parse(playStoreUrl)),
+          style: _storeLinkStyle,
           child: const Text('Google Play'),
         ),
       ];
