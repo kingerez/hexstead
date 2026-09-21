@@ -52,6 +52,13 @@ Wait for `Flutter run key commands` in `$S/run.log`. First iOS build
 
 Teardown: `kill $(cat $S/holder.pid)` then `pkill -f "flutter_tools.snapshot run"`.
 
+> **Gotcha - never cold launch via `simctl launch`.** The installed
+> bundle's kernel is frozen at the session's first build; hot reload/
+> restart only patch the running VM. A `simctl launch` (or tapping the
+> app icon) runs the STALE code from session start - it once resurfaced
+> a pre-monetization setup screen and looked exactly like a state bug.
+> To cold-start current code, tear down and start a fresh `flutter run`.
+
 > **Gotcha - never hot reload through the Dart VM service.** Calling
 > `reloadSources` on `http://127.0.0.1:<port>/<token>/` returns
 > `"success":false, "Error while starting Kernel isolate task"`. The
