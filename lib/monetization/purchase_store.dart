@@ -12,8 +12,7 @@ import 'purchase_gateway_factory_stub.dart';
 /// from the gateway are the source of truth when they arrive.
 class PurchaseStore extends ChangeNotifier {
   PurchaseStore(this._gateway,
-      {Duration restoreSettle = const Duration(seconds: 2)})
-      : _restoreSettle = restoreSettle;
+      {this.restoreSettle = const Duration(seconds: 2)});
 
   /// Reassignable so tests (and Task 3's conditional factory) can swap the
   /// gateway; production code only ever reads it.
@@ -24,7 +23,7 @@ class PurchaseStore extends ChangeNotifier {
   /// Restored events arrive on the stream, possibly after the platform
   /// restore call returns; this window keeps "no purchase found" honest
   /// without a spinner state machine. Zero in tests.
-  final Duration _restoreSettle;
+  final Duration restoreSettle;
 
   StreamSubscription<PurchaseEvent>? _sub;
   bool _unlocked = false;
@@ -82,7 +81,7 @@ class PurchaseStore extends ChangeNotifier {
     _lastError = null;
     if (!_gateway.supported) return false;
     await _gateway.restore();
-    await Future<void>.delayed(_restoreSettle);
+    await Future<void>.delayed(restoreSettle);
     return _unlocked;
   }
 
