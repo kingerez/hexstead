@@ -9,7 +9,7 @@ is done.
 - [ ] Sign the Paid Applications agreement (Agreements, Tax, Banking) and
       complete banking + tax forms.
 - [ ] Create the in-app purchase: Non-Consumable, product id exactly
-      `hexstead.full`, price $5.99 (USD tier), localized display name
+      `hexstead.full`, price $3.99 (USD tier), localized display name
       "The Full Homestead", plus review screenshot (the paywall dialog).
 - [ ] Add the In-App Purchase capability to the Runner target if the build
       rejects StoreKit calls (Xcode > Runner > Signing & Capabilities).
@@ -22,7 +22,7 @@ is done.
 
 - [ ] Xcode > File > New > File > StoreKit Configuration File, name it
       `Hexstead.storekit`, save under `ios/`.
-- [ ] Add a Non-Consumable: product id `hexstead.full`, price 5.99.
+- [ ] Add a Non-Consumable: product id `hexstead.full`, price 3.99.
 - [ ] Product > Scheme > Edit Scheme > Run > Options > StoreKit
       Configuration: select `Hexstead.storekit`.
 - [ ] In the simulator: buy from a locked chip, buy from settings, cancel
@@ -41,7 +41,7 @@ is done.
 - [ ] Create the app, upload a signed bundle to the Internal testing
       track (signing config is not set up yet - `flutter build appbundle`
       + Play App Signing).
-- [ ] Create the in-app product `hexstead.full`, $5.99, activate it.
+- [ ] Create the in-app product `hexstead.full`, $3.99, activate it.
 - [ ] Add license testers (Play Console > Settings > License testing) and
       run the same buy/cancel/restore flows on a device.
 

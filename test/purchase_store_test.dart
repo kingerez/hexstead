@@ -10,7 +10,7 @@ class FakeGateway implements PurchaseGateway {
   final events_ = StreamController<PurchaseEvent>.broadcast();
   bool buyCalled = false;
   bool restoreCalled = false;
-  String? priceToReturn = r'$5.99';
+  String? priceToReturn = r'$3.99';
 
   @override
   bool get supported => true;
@@ -117,7 +117,7 @@ void main() {
     final store = storeWith(FakeGateway());
     await store.load();
     await Future<void>.delayed(Duration.zero);
-    expect(store.price, r'$5.99');
+    expect(store.price, r'$3.99');
   });
 
   test('unsupported gateway: locked, no price, restore false', () async {

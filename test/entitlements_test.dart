@@ -35,6 +35,15 @@ void main() {
     });
   });
 
+  group('trialAvailable', () {
+    test('only for locked players who have not spent it', () {
+      expect(trialAvailable(unlocked: false, trialUsed: false), isTrue);
+      expect(trialAvailable(unlocked: false, trialUsed: true), isFalse);
+      expect(trialAvailable(unlocked: true, trialUsed: false), isFalse);
+      expect(trialAvailable(unlocked: true, trialUsed: true), isFalse);
+    });
+  });
+
   group('shouldShowInterstitial', () {
     test('never for unlocked players', () {
       expect(shouldShowInterstitial(unlocked: true, gamesStartedBefore: 5),

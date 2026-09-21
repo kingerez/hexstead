@@ -23,7 +23,7 @@ class FakeGateway implements PurchaseGateway {
   Stream<PurchaseEvent> get events => events_.stream;
 
   @override
-  Future<String?> queryPrice(String productId) async => r'$5.99';
+  Future<String?> queryPrice(String productId) async => r'$3.99';
 
   @override
   Future<bool> buy(String productId) async => true;

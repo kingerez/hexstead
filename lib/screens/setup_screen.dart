@@ -32,10 +32,15 @@ class _SetupScreenState extends State<SetupScreen> {
 
   static const _botNames = ['Rosalind', 'Bertram', 'Wilhelmina'];
 
+  // Starts spent: until prefs answer, the offer stays hidden rather than
+  // flashing at players who already used it or own the game.
+  bool _trialUsed = true;
+
   @override
   void initState() {
     super.initState();
     PurchaseStore.instance.addListener(_onPurchaseChanged);
+    _loadTrialUsed();
     _maybePreloadAd();
   }
 
@@ -52,6 +57,12 @@ class _SetupScreenState extends State<SetupScreen> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _loadTrialUsed() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() => _trialUsed = prefs.getBool(trialUsedKey) ?? false);
+  }
+
   /// Only fetch ad inventory when it can actually be shown: free player,
   /// past the first-game grace. Unlocked players never load the SDK's work.
   Future<void> _maybePreloadAd() async {
@@ -65,19 +76,49 @@ class _SetupScreenState extends State<SetupScreen> {
 
   Future<void> _start() async {
     SoundStore.instance.playSfx(Sfx.uiTap);
-    final players = [
-      const PlayerSetup(name: 'You', isBot: false),
-      for (var i = 0; i < _botCount; i++)
-        PlayerSetup(name: _botNames[i], isBot: true, difficulty: _difficulty),
-    ];
+    await _launch(
+      [
+        const PlayerSetup(name: 'You', isBot: false),
+        for (var i = 0; i < _botCount; i++)
+          PlayerSetup(name: _botNames[i], isBot: true, difficulty: _difficulty),
+      ],
+      allowAd: true,
+    );
+  }
+
+  /// The tasting is spent at the door, not at the end: a player who quits
+  /// mid-match does not get it back. And it never carries an ad - it is a
+  /// taste of the bought experience, not of the free one.
+  Future<void> _startTrial() async {
+    SoundStore.instance.playSfx(Sfx.uiTap);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(trialUsedKey, true);
+    if (!mounted) return;
+    setState(() => _trialUsed = true);
+    await _launch(
+      [
+        const PlayerSetup(name: 'You', isBot: false),
+        for (var i = 0; i < 2; i++)
+          PlayerSetup(
+              name: _botNames[i],
+              isBot: true,
+              difficulty: BotDifficulty.medium),
+      ],
+      allowAd: false,
+    );
+  }
+
+  Future<void> _launch(List<PlayerSetup> players,
+      {required bool allowAd}) async {
     final navigator = Navigator.of(context);
     final prefs = await SharedPreferences.getInstance();
     final startedBefore = prefs.getInt(gamesStartedKey) ?? 0;
     await prefs.setInt(gamesStartedKey, startedBefore + 1);
-    if (shouldShowInterstitial(
-      unlocked: PurchaseStore.instance.isUnlocked,
-      gamesStartedBefore: startedBefore,
-    )) {
+    if (allowAd &&
+        shouldShowInterstitial(
+          unlocked: PurchaseStore.instance.isUnlocked,
+          gamesStartedBefore: startedBefore,
+        )) {
       await AdService.instance.showIfReady();
     }
     await widget.controller.startNewGame(
@@ -240,6 +281,38 @@ class _SetupScreenState extends State<SetupScreen> {
               ),
               child: const Text('Begin', style: TextStyle(fontSize: 18)),
             ),
+            if (trialAvailable(
+              unlocked: PurchaseStore.instance.isUnlocked,
+              trialUsed: _trialUsed,
+            )) ...[
+              const SizedBox(height: 20),
+              const Divider(height: 24, color: Color(0xFF8A6F4D)),
+              _sectionLabel('FREE TASTING'),
+              const SizedBox(height: 8),
+              const Text(
+                'One Fair match against two rivals - on the house',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF7A6647),
+                ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton(
+                onPressed: _startTrial,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF9A6B1F),
+                  side: const BorderSide(color: Color(0xFF9A6B1F)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 28, vertical: 10),
+                ),
+                child: const Text(
+                  'Try it',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
           ],
         ),
       ),

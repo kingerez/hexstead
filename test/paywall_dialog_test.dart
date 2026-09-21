@@ -21,7 +21,7 @@ class FakeGateway implements PurchaseGateway {
   Stream<PurchaseEvent> get events => events_.stream;
 
   @override
-  Future<String?> queryPrice(String productId) async => r'$5.99';
+  Future<String?> queryPrice(String productId) async => r'$3.99';
 
   @override
   Future<bool> buy(String productId) async {
@@ -58,7 +58,7 @@ void main() {
     await PurchaseStore.instance.load();
 
     await openPaywall(tester);
-    expect(find.textContaining(r'$5.99'), findsOneWidget);
+    expect(find.textContaining(r'$3.99'), findsOneWidget);
 
     await tester.tap(find.textContaining('Unlock').last);
     await tester.pump();

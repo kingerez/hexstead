@@ -12,6 +12,11 @@ const String unlockedCacheKey = 'unlocked_v1';
 /// The tutorial never passes through setup, so it never increments this.
 const String gamesStartedKey = 'games_started_v1';
 
+/// SharedPreferences key remembering that the one free tasting was spent.
+/// It is consumed the moment the match begins, so quitting early does not
+/// hand it back.
+const String trialUsedKey = 'trial_used_v1';
+
 /// Free tier is exactly one easy bot; the unlock opens everything else.
 bool setupChoiceAllowed({
   required bool unlocked,
@@ -27,3 +32,8 @@ bool shouldShowInterstitial({
   required int gamesStartedBefore,
 }) =>
     !unlocked && gamesStartedBefore >= 1;
+
+/// The single free tasting of the paid experience. Owners have no use for
+/// it, and it is offered only until it is spent.
+bool trialAvailable({required bool unlocked, required bool trialUsed}) =>
+    !unlocked && !trialUsed;
