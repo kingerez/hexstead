@@ -73,7 +73,12 @@ class PurchaseStore extends ChangeNotifier {
   Future<void> buy() async {
     _lastError = null;
     if (!_gateway.supported) return;
-    await _gateway.buy(fullUnlockProductId);
+    try {
+      await _gateway.buy(fullUnlockProductId);
+    } catch (_) {
+      _lastError = 'Purchase failed - try again later';
+      notifyListeners();
+    }
   }
 
   /// Returns true when a past purchase came back. False after the settle
@@ -81,7 +86,12 @@ class PurchaseStore extends ChangeNotifier {
   Future<bool> restore() async {
     _lastError = null;
     if (!_gateway.supported) return false;
-    await _gateway.restore();
+    try {
+      await _gateway.restore();
+    } catch (_) {
+      _lastError = 'Could not reach the store - try again later';
+      notifyListeners();
+    }
     await Future<void>.delayed(restoreSettle);
     return _unlocked;
   }

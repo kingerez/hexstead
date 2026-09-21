@@ -33,6 +33,23 @@ class FakeGateway implements PurchaseGateway {
   }
 }
 
+class ThrowingGateway implements PurchaseGateway {
+  @override
+  bool get supported => true;
+
+  @override
+  Stream<PurchaseEvent> get events => const Stream.empty();
+
+  @override
+  Future<String?> queryPrice(String productId) async => null;
+
+  @override
+  Future<bool> buy(String productId) async => throw Exception('boom');
+
+  @override
+  Future<void> restore() async => throw Exception('boom');
+}
+
 PurchaseStore storeWith(FakeGateway gateway) =>
     PurchaseStore(gateway, restoreSettle: Duration.zero);
 
@@ -110,6 +127,16 @@ void main() {
     await store.load();
     expect(store.purchasesSupported, isFalse);
     expect(store.isUnlocked, isFalse);
+    expect(await store.restore(), isFalse);
+  });
+
+  test('a throwing gateway never lets play block - buy and restore absorb it',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final store = PurchaseStore(ThrowingGateway(), restoreSettle: Duration.zero);
+    await store.load();
+    await store.buy();
+    expect(store.lastError, isNotNull);
     expect(await store.restore(), isFalse);
   });
 }

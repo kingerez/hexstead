@@ -16,7 +16,9 @@ PurchaseGateway createPurchaseGateway() {
 /// redelivering them.
 class MobilePurchaseGateway implements PurchaseGateway {
   MobilePurchaseGateway() {
-    InAppPurchase.instance.purchaseStream.listen(_onPurchases);
+    InAppPurchase.instance.purchaseStream.listen(_onPurchases,
+        onError: (Object e) =>
+            _events.add(PurchaseEvent(PurchaseEventType.error, e.toString())));
   }
 
   final _events = StreamController<PurchaseEvent>.broadcast();
@@ -48,10 +50,14 @@ class MobilePurchaseGateway implements PurchaseGateway {
   }
 
   Future<ProductDetails?> _product() async {
-    if (!await InAppPurchase.instance.isAvailable()) return null;
-    final resp = await InAppPurchase.instance
-        .queryProductDetails({fullUnlockProductId});
-    return resp.productDetails.isEmpty ? null : resp.productDetails.first;
+    try {
+      if (!await InAppPurchase.instance.isAvailable()) return null;
+      final resp = await InAppPurchase.instance
+          .queryProductDetails({fullUnlockProductId});
+      return resp.productDetails.isEmpty ? null : resp.productDetails.first;
+    } catch (_) {
+      return null;
+    }
   }
 
   @override
@@ -60,16 +66,29 @@ class MobilePurchaseGateway implements PurchaseGateway {
 
   @override
   Future<bool> buy(String productId) async {
-    final product = await _product();
-    if (product == null) {
+    try {
+      final product = await _product();
+      if (product == null) {
+        _events.add(const PurchaseEvent(
+            PurchaseEventType.error, 'Store unavailable - try again later'));
+        return false;
+      }
+      return InAppPurchase.instance.buyNonConsumable(
+          purchaseParam: PurchaseParam(productDetails: product));
+    } catch (_) {
       _events.add(const PurchaseEvent(
           PurchaseEventType.error, 'Store unavailable - try again later'));
       return false;
     }
-    return InAppPurchase.instance.buyNonConsumable(
-        purchaseParam: PurchaseParam(productDetails: product));
   }
 
   @override
-  Future<void> restore() => InAppPurchase.instance.restorePurchases();
+  Future<void> restore() async {
+    try {
+      await InAppPurchase.instance.restorePurchases();
+    } catch (_) {
+      _events.add(const PurchaseEvent(PurchaseEventType.error,
+          'Could not reach the store - try again later'));
+    }
+  }
 }
