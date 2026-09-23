@@ -126,6 +126,28 @@ void main() {
       expect(correct, greaterThanOrEqualTo(9), reason: '$correct/10 correct');
     });
 
+    test('never fumbles a one-resource activation gap, at any difficulty', () {
+      // Sum 6 wakes the bot's hamlet for a single wood; the split (2 and 4)
+      // feeds nobody. The gap is one eval point - the smallest real gap the
+      // choice can have, and reading the dice is mechanical, so no
+      // difficulty may misread it.
+      const tiles = <TileSpec>[
+        (Hex(0, 0), TerrainType.forest, 6, 0, 1),
+        (Hex(3, 0), TerrainType.hill, 8, 1, 1),
+      ];
+      for (final difficulty in BotDifficulty.values) {
+        for (var seed = 0; seed < 30; seed++) {
+          for (var round = 1; round <= 10; round++) {
+            expect(
+                SmartBot.chooseAction(dicePhase(tiles, (2, 4),
+                    difficulty: difficulty, seed: seed, round: round)),
+                const ChooseActivation(ActivationMode.sum),
+                reason: '$difficulty seed $seed round $round');
+          }
+        }
+      }
+    });
+
     test('second chance is judged on the average roll, not the real one', () {
       // Dice (2, 3): nothing answers 2, 3 or 5, while villages wait on 4, 6,
       // 8 and 9 - so the average reroll is worth more than the card.

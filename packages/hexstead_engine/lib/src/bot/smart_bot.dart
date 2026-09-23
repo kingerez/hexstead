@@ -22,14 +22,27 @@ abstract final class SmartBot {
     final me = state.currentPlayerIndex;
     final difficulty = state.currentPlayer.difficulty;
 
-    GameAction? best;
-    var bestValue = double.negativeInfinity;
+    // True values first, so noise can only shuffle moves that are genuinely
+    // close: (original index, action, noiseless value).
+    final candidates = <(int, GameAction, double)>[];
+    var trueBest = double.negativeInfinity;
     for (final (index, action) in actions.indexed) {
       if (_overlooked(state, difficulty, index, actions.length)) continue;
       final outcome = _valueOf(state, action, me, difficulty, 0);
       if (outcome == null) continue;
-      final value =
-          outcome + _noise(state, index) * _noiseAmplitude(difficulty);
+      candidates.add((index, action, outcome));
+      if (outcome > trueBest) trueBest = outcome;
+    }
+
+    // Anything far below the best is dropped before noise gets a vote; the
+    // survivors keep the noise of their original index, so replays match.
+    final cutoff = trueBest - _blunderMargin(difficulty);
+    final amplitude = _noiseAmplitude(state, difficulty);
+    GameAction? best;
+    var bestValue = double.negativeInfinity;
+    for (final (index, action, outcome) in candidates) {
+      if (outcome < cutoff) continue;
+      final value = outcome + _noise(state, index) * amplitude;
       if (value > bestValue) {
         bestValue = value;
         best = action;
@@ -122,13 +135,31 @@ abstract final class SmartBot {
     return _hash(state.seed, state.round * 100 + index) % 3 != 2;
   }
 
-  /// Sized against the eval: a real sum-vs-split gap is a few points, so hard
-  /// bots almost never misread one and medium bots slip only now and then.
-  static double _noiseAmplitude(BotDifficulty difficulty) =>
+  /// How wide a difficulty's hesitation is, in eval points. Wide enough on
+  /// easy to wander between plausible plans, and the blunder margin keeps it
+  /// from wandering off a cliff.
+  ///
+  /// Reading the dice is mechanical, not strategic: a bot that fumbles a
+  /// visible sum-vs-split looks broken rather than beatable, so every
+  /// difficulty plays that choice (and the die-mod cards offered with it) by
+  /// true value. Personality lives in the strategic phases.
+  static double _noiseAmplitude(GameState state, BotDifficulty difficulty) =>
+      state.phase == Phase.awaitingChoice
+          ? 0.0
+          : switch (difficulty) {
+              BotDifficulty.easy => 45.0,
+              BotDifficulty.medium => 4.0,
+              BotDifficulty.hard => 0.3,
+            };
+
+  /// How far below the best an action may sit and still be in the running.
+  /// Hard bots only ever waver between near-equals; easy bots talk themselves
+  /// into mediocre moves but never into the plainly awful one.
+  static double _blunderMargin(BotDifficulty difficulty) =>
       switch (difficulty) {
-        BotDifficulty.easy => 45.0,
-        BotDifficulty.medium => 4.0,
-        BotDifficulty.hard => 0.3,
+        BotDifficulty.easy => 8.0,
+        BotDifficulty.medium => 2.5,
+        BotDifficulty.hard => 0.5,
       };
 
   /// Deterministic pseudo-noise in [-1, 1] from the state identity - never
