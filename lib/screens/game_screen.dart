@@ -1685,9 +1685,13 @@ class _PlayerChipState extends State<_PlayerChip>
                 : null,
           ),
           // One row: a second line would round the pill into a circle. The
-          // marker rides smaller than the label so it never grows the chip.
+          // marker rides smaller than the label so it never grows the chip,
+          // and the row aligns on the text baseline - centering two different
+          // font sizes leaves the emoji floating above the label.
           child: Row(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
             children: [
               Text(
                 widget.label,
