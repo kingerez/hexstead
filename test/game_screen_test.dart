@@ -836,7 +836,8 @@ void main() {
 
     final badges = find.byKey(const ValueKey('landmark-badges-0'));
     expect(badges, findsOneWidget);
-    expect(tester.widget<Text>(badges).data, '🌾⚖️');
+    // One generic marker however many are built - the chip stays one line.
+    expect(tester.widget<Text>(badges).data, '🏛');
     // The bot has built nothing, so its chip stays a bare score.
     expect(find.byKey(const ValueKey('landmark-badges-1')), findsNothing);
   });

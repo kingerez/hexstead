@@ -1588,8 +1588,9 @@ class _PlayerChip extends StatefulWidget {
   /// Points short of victory while inside the warning range, else null.
   final int? matchPointStep;
 
-  /// What this player has built, badged under the label, and whose chip
-  /// this is - the badge row keys itself off the id.
+  /// What this player has built - only whether the list is empty shows here,
+  /// as one inline marker; tapping the chip spells the list out. The id keys
+  /// that marker.
   final List<String> landmarkIds;
   final int playerId;
 
@@ -1672,7 +1673,9 @@ class _PlayerChipState extends State<_PlayerChip>
                   ]
                 : null,
           ),
-          child: Column(
+          // One row: a second line would round the pill into a circle. The
+          // marker rides smaller than the label so it never grows the chip.
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
@@ -1683,11 +1686,17 @@ class _PlayerChipState extends State<_PlayerChip>
                   fontSize: 13,
                 ),
               ),
-              if (widget.landmarkIds.isNotEmpty)
-                LandmarkBadgeRow(
-                  landmarkIds: widget.landmarkIds,
-                  playerId: widget.playerId,
+              if (widget.landmarkIds.isNotEmpty) ...[
+                const SizedBox(width: 4),
+                Text(
+                  '🏛',
+                  key: ValueKey('landmark-badges-${widget.playerId}'),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: widget.active ? Colors.white : Colors.white70,
+                  ),
                 ),
+              ],
             ],
           ),
         );

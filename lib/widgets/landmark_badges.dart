@@ -3,7 +3,9 @@ import 'package:hexstead_engine/hexstead_engine.dart';
 
 import 'chrome.dart';
 
-/// Placeholder "art" per landmark until the generated set lands.
+/// Placeholder "art" per landmark until the generated set lands. The score
+/// chip shows the generic 🏛 instead; these are for the popup and the shop,
+/// where there is room to name what each one is.
 const landmarkEmoji = {
   'high_roller': '🎲',
   'trade_post': '⚖️',
@@ -18,35 +20,6 @@ const landmarkEmoji = {
   'watchtower': '🗼',
   'keep': '🏰',
 };
-
-/// How many emoji a chip shows before falling back to a count. Real games
-/// end with 0-4 landmarks each; the cap only guards a narrow screen.
-const _badgeCap = 5;
-
-/// The emoji strip under a score chip: what this player has built. Keyed
-/// rather than found by glyph, since emoji rendering is no test's business.
-class LandmarkBadgeRow extends StatelessWidget {
-  final List<String> landmarkIds;
-  final int playerId;
-
-  const LandmarkBadgeRow({
-    super.key,
-    required this.landmarkIds,
-    required this.playerId,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final shown = landmarkIds.take(_badgeCap);
-    final extra = landmarkIds.length - shown.length;
-    return Text(
-      '${shown.map((id) => landmarkEmoji[id] ?? '🏛').join()}'
-      '${extra > 0 ? ' +$extra' : ''}',
-      key: ValueKey('landmark-badges-$playerId'),
-      style: const TextStyle(fontSize: 10, color: Colors.white),
-    );
-  }
-}
 
 /// What a tapped score chip opens: the player's landmarks spelled out, name
 /// and power each. Tap outside to close.
