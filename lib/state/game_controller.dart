@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
 
+import '../observability/analytics.dart';
 import 'persistence.dart';
 
 /// Owns the live [GameState]: applies human actions, drives bot turns with
@@ -53,6 +54,12 @@ class GameController extends ChangeNotifier {
       roundCap: roundCap,
     );
     lastEvents = const [];
+    Analytics.instance.capture('game_started', {
+      'players': players.length,
+      'bots': players.where((p) => p.isBot).length,
+      'target_vp': targetVp,
+      'round_cap': roundCap,
+    });
     await _persist();
     notifyListeners();
     await _driveBots();
@@ -85,6 +92,7 @@ class GameController extends ChangeNotifier {
     }
     _state = decoded;
     lastEvents = const [];
+    Analytics.instance.capture('game_resumed', {'round': decoded.round});
     notifyListeners();
     await _driveBots();
     return true;
@@ -96,6 +104,7 @@ class GameController extends ChangeNotifier {
     final result = apply(_state!, action);
     _state = result.state;
     lastEvents = result.events;
+    _trackEvents(result.events, humanAction: true);
     await _persist();
     notifyListeners();
     await eventDelegate?.call(result.events);
@@ -119,12 +128,42 @@ class GameController extends ChangeNotifier {
         final result = apply(_state!, action);
         _state = result.state;
         lastEvents = result.events;
+        _trackEvents(result.events, humanAction: false);
         await _persist();
         notifyListeners();
         await eventDelegate?.call(result.events);
       }
     } finally {
       _drivingBots = false;
+    }
+  }
+
+  /// Analytics for what just happened. The end of the game is worth knowing
+  /// whoever brought it about; the feature events are usage signal, so only
+  /// the player's own moves count - a bot buying a landmark says nothing.
+  void _trackEvents(List<GameEvent> events, {required bool humanAction}) {
+    final state = _state!;
+    for (final event in events) {
+      if (event is GameEnded) {
+        final humans = state.players.where((p) => !p.isBot);
+        final human = humans.isEmpty ? null : humans.first;
+        Analytics.instance.capture('game_finished', {
+          'winner_id': event.winnerId,
+          'human_won': !state.players[event.winnerId].isBot,
+          'round': state.round,
+          'human_score': human == null ? null : scoreFor(state, human.id),
+          'human_landmarks': human?.landmarkIds.length,
+        });
+      }
+      if (!humanAction) continue;
+      if (event is LandmarkPurchased) {
+        Analytics.instance
+            .capture('landmark_bought', {'landmark_id': event.landmarkId});
+      } else if (event is CardPlayed) {
+        Analytics.instance.capture('card_played', {'card_id': event.cardId});
+      } else if (event is TradeCompleted) {
+        Analytics.instance.capture('trade_completed');
+      }
     }
   }
 

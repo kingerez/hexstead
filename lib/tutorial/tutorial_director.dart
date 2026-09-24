@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:hexstead_engine/hexstead_engine.dart';
 
+import '../observability/analytics.dart';
 import 'tutorial_scenario.dart';
 
 /// A piece of chrome the current step is pointing at: it glows, and it is
@@ -82,6 +83,7 @@ class TutorialStep {
 class TutorialDirector extends ChangeNotifier {
   final List<TutorialStep> steps;
   int _index = 0;
+  bool _completionCaptured = false;
 
   TutorialDirector({List<TutorialStep>? steps})
       : steps = steps ?? tutorialSteps();
@@ -120,6 +122,15 @@ class TutorialDirector extends ChangeNotifier {
     if (current.advanceOnUi == signal) _advance();
   }
 
+  /// The funnel's last rung. The closing beat's Finish button leaves the
+  /// tutorial without ever walking off the end of the script, so the screen
+  /// reports that ending itself; either way it counts once.
+  void notifyCompleted() {
+    if (_completionCaptured) return;
+    _completionCaptured = true;
+    Analytics.instance.capture('tutorial_completed');
+  }
+
   void notifyHexInspected(Hex hex) {
     if (finished) return;
     if (current.inspectHex == hex) _advance();
@@ -127,6 +138,11 @@ class TutorialDirector extends ChangeNotifier {
 
   void _advance() {
     _index += 1;
+    if (finished) {
+      notifyCompleted();
+    } else {
+      Analytics.instance.capture('tutorial_step_reached', {'step': _index});
+    }
     notifyListeners();
   }
 }

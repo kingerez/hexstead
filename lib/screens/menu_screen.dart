@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../art/art_store.dart';
 import '../audio/sound_store.dart';
 import '../main.dart';
+import '../observability/analytics.dart';
 import '../state/game_controller.dart';
 import '../state/persistence.dart';
 import '../tutorial/tutorial_director.dart';
@@ -82,6 +83,7 @@ class _MenuScreenState extends State<MenuScreen> with RouteAware {
   /// forgets: the real autosave behind Continue is never touched.
   Future<void> _startTutorial() async {
     _menuTap();
+    Analytics.instance.capture('tutorial_started');
     final navigator = Navigator.of(context);
     final scenario = TutorialScenario();
     final tutorialController = GameController(

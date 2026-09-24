@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
+import '../observability/analytics.dart';
 import 'ad_service.dart';
 
 AdService createAdService() {
@@ -65,12 +66,19 @@ class MobileAdService implements AdService {
     _ready = null;
     final dismissed = Completer<void>();
     ad.fullScreenContentCallback = FullScreenContentCallback(
+      onAdShowedFullScreenContent: (ad) {
+        Analytics.instance.capture('ad_shown');
+      },
       onAdDismissedFullScreenContent: (ad) {
         ad.dispose();
         if (!dismissed.isCompleted) dismissed.complete();
       },
       onAdFailedToShowFullScreenContent: (ad, error) {
         if (kDebugMode) debugPrint('Interstitial show failed: $error');
+        Analytics.instance.capture('ad_failed_to_show', {
+          'code': error.code,
+          'message': error.message,
+        });
         ad.dispose();
         if (!dismissed.isCompleted) dismissed.complete();
       },

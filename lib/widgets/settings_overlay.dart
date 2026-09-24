@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../audio/sound_store.dart';
 import '../monetization/purchase_store.dart';
+import '../observability/analytics.dart';
 import 'paywall_dialog.dart';
 
 /// In-game settings card: the music and sound toggles (SoundStore owns both
@@ -144,10 +145,14 @@ class _SettingsOverlayState extends State<SettingsOverlay> {
                     _toggle('Music', _music, (v) {
                       setState(() => _music = v);
                       SoundStore.instance.setMusicEnabled(v);
+                      Analytics.instance.capture(
+                          'setting_changed', {'setting': 'music', 'value': v});
                     }),
                     _toggle('Sounds', _sounds, (v) {
                       setState(() => _sounds = v);
                       SoundStore.instance.setSfxEnabled(v);
+                      Analytics.instance.capture(
+                          'setting_changed', {'setting': 'sounds', 'value': v});
                     }),
                     if (PurchaseStore.instance.purchasesSupported &&
                         !PurchaseStore.instance.isUnlocked) ...[

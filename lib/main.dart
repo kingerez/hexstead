@@ -7,12 +7,28 @@ import 'package:flutter/services.dart';
 import 'art/art_store.dart';
 import 'audio/sound_store.dart';
 import 'monetization/purchase_store.dart';
+import 'observability/analytics.dart';
 import 'screens/menu_screen.dart';
 import 'state/game_controller.dart';
 import 'state/persistence.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Analytics.instance.init();
+  // Crash reporting on top of the framework's own handling: presentError
+  // keeps the red screen and the console dump exactly as they were.
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    Analytics.instance.reportError(details.exception, details.stack);
+  };
+  // Errors that escape the framework entirely (async gaps, platform
+  // callbacks). Claiming one is handled silences the engine's own log, so
+  // only claim it when the report actually went somewhere: with analytics
+  // off (debug, tests, a failed setup) the console stays the one witness.
+  PlatformDispatcher.instance.onError = (error, stack) {
+    Analytics.instance.reportError(error, stack);
+    return Analytics.instance.active;
+  };
   // The whole UI is designed portrait-first; landscape is never a good fit.
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   await ArtStore.instance.load();

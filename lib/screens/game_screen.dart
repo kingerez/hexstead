@@ -31,6 +31,7 @@ import '../widgets/tile_inspector.dart';
 import '../widgets/turn_splash_overlay.dart';
 import '../widgets/tutorial_banner.dart';
 import '../widgets/welcome_card.dart';
+import '../observability/analytics.dart';
 import '../state/game_controller.dart';
 import '../tutorial/tutorial_director.dart';
 import 'game_over_screen.dart';
@@ -337,6 +338,8 @@ class _GameScreenState extends State<GameScreen> {
 
   void _toggleTips() {
     setState(() => _tipsOn = !_tipsOn);
+    Analytics.instance
+        .capture('setting_changed', {'setting': 'tips', 'value': _tipsOn});
     SharedPreferences.getInstance()
         .then((prefs) => prefs.setBool('tips_on', _tipsOn));
   }
@@ -366,6 +369,7 @@ class _GameScreenState extends State<GameScreen> {
   /// back to the menu. The tutorial's own controller and its NullSaveStore
   /// go with the route - the real autosave was never touched.
   Future<void> _finishTutorial() async {
+    widget.tutorial?.notifyCompleted();
     final navigator = Navigator.of(context);
     SoundStore.instance.startMusic(MusicTrack.menu);
     final prefs = await SharedPreferences.getInstance();
@@ -1054,6 +1058,7 @@ class _GameScreenState extends State<GameScreen> {
                               tutorial?.notifyUi(TutorialUiSignal.fanOpened);
                             },
                             onOpenShop: () {
+                              Analytics.instance.capture('shop_opened');
                               setState(() => _shopOpen = true);
                               tutorial?.notifyUi(TutorialUiSignal.shopOpened);
                             },
@@ -1284,6 +1289,12 @@ class _GameScreenState extends State<GameScreen> {
                       'like.',
               onClose: () => setState(() => _settingsOpen = false),
               onQuitToMenu: () {
+                // The only way out of the tutorial short of its Finish
+                // button, so it is what an abandoned funnel looks like.
+                if (tutorial != null && !tutorial.finished) {
+                  Analytics.instance
+                      .capture('tutorial_skipped', {'at_step': tutorial.index});
+                }
                 SoundStore.instance.startMusic(MusicTrack.menu);
                 Navigator.of(context).popUntil((r) => r.isFirst);
               },

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../observability/analytics.dart';
 import 'entitlements.dart';
 import 'purchase_gateway.dart';
 import 'purchase_gateway_factory_stub.dart'
@@ -52,10 +53,13 @@ class PurchaseStore extends ChangeNotifier {
   Future<void> _onEvent(PurchaseEvent event) async {
     switch (event.type) {
       case PurchaseEventType.purchased:
+        Analytics.instance.capture('purchase_completed');
+        await _setUnlocked(true);
       case PurchaseEventType.restored:
         await _setUnlocked(true);
       case PurchaseEventType.error:
         _lastError = event.message ?? 'Purchase failed';
+        Analytics.instance.capture('purchase_failed', {'error': _lastError});
         notifyListeners();
       case PurchaseEventType.cancelled:
       case PurchaseEventType.pending:
@@ -74,10 +78,12 @@ class PurchaseStore extends ChangeNotifier {
   Future<void> buy() async {
     _lastError = null;
     if (!_gateway.supported) return;
+    Analytics.instance.capture('purchase_started');
     try {
       await _gateway.buy(fullUnlockProductId);
     } catch (_) {
       _lastError = 'Purchase failed - try again later';
+      Analytics.instance.capture('purchase_failed', {'error': _lastError});
       notifyListeners();
     }
   }
@@ -94,6 +100,7 @@ class PurchaseStore extends ChangeNotifier {
       notifyListeners();
     }
     await Future<void>.delayed(restoreSettle);
+    Analytics.instance.capture('purchase_restored', {'found': _unlocked});
     return _unlocked;
   }
 
