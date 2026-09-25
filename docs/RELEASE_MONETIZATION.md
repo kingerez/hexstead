@@ -47,14 +47,16 @@ is done.
 
 ## AdMob
 
-- [ ] Create an AdMob account, register both apps (iOS and Android).
-- [ ] Create one Interstitial ad unit per platform.
-- [ ] Swap the ids in code - all four live in three files:
-      - `lib/monetization/ad_service_factory_io.dart`: both `_adUnitId`
-        values (iOS and Android unit ids).
-      - `ios/Runner/Info.plist`: `GADApplicationIdentifier`.
-      - `android/app/src/main/AndroidManifest.xml`:
-        `com.google.android.gms.ads.APPLICATION_ID`.
+- [x] AdMob account exists; iOS app registered (2026-09-25). Android app
+      NOT registered yet - do it with the Play launch.
+- [x] iOS Interstitial ad unit created and swapped into code
+      (`ad_service_factory_io.dart` iOS branch + `Info.plist`
+      `GADApplicationIdentifier`). Link the App Store listing in AdMob
+      once the app is live.
+- [ ] Android still ships Google's TEST ids - swap both
+      (`ad_service_factory_io.dart` Android branch and
+      `android/app/src/main/AndroidManifest.xml`
+      `com.google.android.gms.ads.APPLICATION_ID`) before any Play upload.
 - [ ] Keep non-personalized requests (`nonPersonalizedAds: true`) unless
       a deliberate ATT/UMP consent flow ships with it.
 - [ ] google_mobile_ads is pinned at ^7.0.0 deliberately - 6.0.0 shares the

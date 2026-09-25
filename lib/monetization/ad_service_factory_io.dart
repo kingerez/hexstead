@@ -16,10 +16,10 @@ AdService createAdService() {
 /// prompt, minimal privacy labels). Load failures are silently absorbed:
 /// the game starts without an ad, never behind a spinner.
 class MobileAdService implements AdService {
-  // Google's public test ids. The release checklist swaps these for the
-  // real AdMob unit ids (docs/RELEASE_MONETIZATION.md).
+  // iOS is the real Hexstead interstitial unit; Android keeps Google's
+  // public test id until a Play launch exists (docs/RELEASE_MONETIZATION.md).
   static final String _adUnitId = Platform.isIOS
-      ? 'ca-app-pub-3940256099942544/4411468910'
+      ? 'ca-app-pub-5839027642665475/3789564518'
       : 'ca-app-pub-3940256099942544/1033173712';
 
   bool _sdkStarted = false;
