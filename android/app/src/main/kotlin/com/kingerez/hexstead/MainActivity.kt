@@ -1,4 +1,4 @@
-package com.hexstead.hexstead
+package com.kingerez.hexstead
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -31,16 +31,18 @@ is done.
 
 ## Google Play Console
 
-- [ ] DECIDE THE APPLICATION ID FIRST: it is `com.hexstead.hexstead` today
-      and permanent after the first upload. For consistency with iOS
-      (`com.kingerez.hexstead`) consider renaming BEFORE creating the app
-      (android/app/build.gradle.kts `applicationId` + `namespace`,
-      MainActivity package path). If renamed, update `playStoreUrl` in
+- [x] APPLICATION ID DECIDED AND RENAMED (2026-09-25): it is
+      `com.kingerez.hexstead`, matching iOS, and permanent after the first
+      upload. Renamed in android/app/build.gradle.kts (`applicationId` +
+      `namespace`), the MainActivity package path, and `playStoreUrl` in
       `lib/widgets/paywall_dialog.dart`.
 - [ ] Developer account + merchant profile (payments).
+- [x] Upload signing config wired (2026-09-25): `android/upload-keystore.jks`
+      (alias `upload`) + `android/key.properties`, both gitignored and
+      local-only. `flutter build appbundle --release` signs with it; without
+      key.properties the build falls back to the debug key.
 - [ ] Create the app, upload a signed bundle to the Internal testing
-      track (signing config is not set up yet - `flutter build appbundle`
-      + Play App Signing).
+      track (Play App Signing takes the upload key above).
 - [ ] Create the in-app product `hexstead.full`, $3.99, activate it.
 - [ ] Add license testers (Play Console > Settings > License testing) and
       run the same buy/cancel/restore flows on a device.

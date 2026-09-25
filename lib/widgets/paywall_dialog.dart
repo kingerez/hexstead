@@ -7,7 +7,7 @@ import 'chrome.dart';
 
 const String appStoreUrl = 'https://apps.apple.com/app/id6812996489';
 const String playStoreUrl =
-    'https://play.google.com/store/apps/details?id=com.hexstead.hexstead';
+    'https://play.google.com/store/apps/details?id=com.kingerez.hexstead';
 
 Future<void> showPaywall(BuildContext context) => showDialog(
       context: context,
