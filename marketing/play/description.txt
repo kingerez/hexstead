@@ -1,0 +1,18 @@
+Hexstead is a cozy board game of dice, land, and rivalry. Settle a valley of hexes, and claim the realm before the seasons turn.
+
+Every round starts with a roll of the dice - every hex matching the roll pays its owner. Spend your harvest to claim new tiles, upgrade your land, and chase your secret goal. But watch the roads: roll a seven and the bandit rides, blocking a hex and stealing from whoever owns it.
+
+ HOW IT PLAYS
+ - Roll two dice, then choose: activate the sum, or each die on its own
+ - Claim free tiles with wood and brick, upgrade them to double their yield
+ - Play cards to bend the rules: shift a die, charter distant land, or send the bandit after a rival
+ - Buy landmarks for lasting powers, like warding the bandit off your fields
+ - First to 15 points wins - or the richest realm when round 15 ends
+
+ SHARP RIVALS
+ Face 1 to 3 bots with real strategies of their own. Start Easy, then test yourself against Fair and Cruel opponents with bigger score bonuses on the line.
+
+ MADE FOR QUICK SESSIONS
+ A full match runs about ten minutes. Play offline, anywhere, in portrait with one hand.
+
+Hexstead is free to play against an Easy rival. A single one-time purchase unlocks every difficulty, matches with up to 3 rivals, and removes ads for good. No subscriptions, no consumables.

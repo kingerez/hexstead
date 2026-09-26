@@ -36,16 +36,23 @@ is done.
       upload. Renamed in android/app/build.gradle.kts (`applicationId` +
       `namespace`), the MainActivity package path, and `playStoreUrl` in
       `lib/widgets/paywall_dialog.dart`.
-- [ ] Developer account + merchant profile (payments).
+- [x] Developer account + merchant profile existed from a previous project.
 - [x] Upload signing config wired (2026-09-25): `android/upload-keystore.jks`
       (alias `upload`) + `android/key.properties`, both gitignored and
       local-only. `flutter build appbundle --release` signs with it; without
       key.properties the build falls back to the debug key.
-- [ ] Create the app, upload a signed bundle to the Internal testing
-      track (Play App Signing takes the upload key above).
-- [ ] Create the in-app product `hexstead.full`, $3.99, activate it.
-- [ ] Add license testers (Play Console > Settings > License testing) and
-      run the same buy/cancel/restore flows on a device.
+- [x] App created and fully set up (2026-09-26): all content declarations
+      (data safety, ads, content rating, target audience 18+, app access),
+      category Game > Board, contact details, complete store listing
+      (descriptions, icon, feature graphic, phone + tablet screenshots -
+      generated assets live in marketing/play/). Internal testing track
+      ACTIVE with release 30 (1.0.0), tester lists "me" + "my hoes".
+- [x] One-time product `hexstead.full` "The Full Homestead" created and
+      ACTIVE, $3.99 USD base auto-priced worldwide (2026-09-26).
+- [ ] Join the internal test (opt-in link: Internal testing > Testers) and
+      run the buy/cancel/restore flows on a device.
+- [ ] Promote internal -> production and send the declarations for review
+      when ready; a first review typically takes days.
 
 ## AdMob
 
