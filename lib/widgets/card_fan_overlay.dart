@@ -18,6 +18,9 @@ class CardFanOverlay extends StatefulWidget {
   /// Card ids with at least one legal play right now.
   final Set<String> playableCardIds;
 
+  /// Footer hint per unplayable card id (see cardBlockedReason).
+  final Map<String, String> blockedReasons;
+
   /// Card ids that may be swapped via the once-per-game replacement.
   final Set<String> replaceableCardIds;
   final void Function(String cardId)? onReplace;
@@ -34,6 +37,7 @@ class CardFanOverlay extends StatefulWidget {
     required this.onDone,
     required this.flyOffset,
     this.playableCardIds = const {},
+    this.blockedReasons = const {},
     this.replaceableCardIds = const {},
     this.onPlay,
     this.onReplace,
@@ -148,43 +152,57 @@ class _CardFanOverlayState extends State<CardFanOverlay>
     );
   }
 
+  /// A short hand gets bigger cards: one card at hand size looks lost in
+  /// the middle of the screen. Wide hands stay natural and the FittedBox
+  /// still shrinks them on narrow screens.
+  double get _handScale => switch (widget.cardIds.length) {
+        1 => 1.6,
+        2 => 1.4,
+        3 => 1.2,
+        _ => 1.0,
+      };
+
   Widget _card(String id, bool settled) {
-    final spec = cardCatalog[id]!;
     final playable = widget.playableCardIds.contains(id);
     final replaceable = widget.replaceableCardIds.contains(id);
+    final scale = _handScale;
+    // Footer type grows like the card's text, so the hint keeps its place
+    // in the card's hierarchy.
+    final textScale = 1 + (scale - 1) * ActionCardFace.handTextDamping;
     return ActionCardFace(
       cardId: id,
+      layoutScale: scale,
+      textDamping: ActionCardFace.handTextDamping,
       trailing: replaceable
           ? InkWell(
               onTap: settled ? () => widget.onReplace?.call(id) : null,
-              child: const Padding(
-                padding: EdgeInsets.only(left: 2),
+              child: Padding(
+                padding: EdgeInsets.only(left: 2 * scale),
                 child: Icon(Icons.swap_horiz,
-                    size: 18, color: Color(0xFF9A6B1F)),
+                    size: 18 * scale, color: const Color(0xFF9A6B1F)),
               ),
             )
           : null,
       footer: SizedBox(
         width: double.infinity,
-        height: 30,
+        height: 30 * scale,
         child: playable
             ? FilledButton(
                 onPressed: settled ? () => _close(play: id) : null,
                 style: FilledButton.styleFrom(
                   padding: EdgeInsets.zero,
-                  textStyle: const TextStyle(fontSize: 12),
+                  textStyle: TextStyle(fontSize: 12 * textScale),
                 ),
                 child: const Text('Play'),
               )
             : Center(
                 child: Text(
-                  spec.timing == CardTiming.diceChoice
-                      ? 'playable right after rolling'
-                      : 'playable after dice resolve',
+                  widget.blockedReasons[id] ?? "can't be played now",
                   textAlign: TextAlign.center,
                   maxLines: 2,
-                  style: const TextStyle(
-                      fontSize: 9.5, color: Color(0xFF9A8A6A)),
+                  style: TextStyle(
+                      fontSize: 9.5 * textScale,
+                      color: const Color(0xFF9A8A6A)),
                 ),
               ),
       ),
@@ -209,9 +227,16 @@ class ActionCardFace extends StatelessWidget {
   final Widget? footer;
 
   /// Blows the card's box, paddings and art up by this factor - for a card
-  /// shown alone (the bot-play reveal) rather than in the hand fan. The text
-  /// deliberately does NOT follow it: see [_textScale].
+  /// shown alone (the bot-play reveal) or a short hand. The text follows
+  /// only partly: see [_textScale].
   final double layoutScale;
+
+  /// Share of [layoutScale]'s growth the text takes on (0 = none, 1 = all).
+  final double textDamping;
+
+  /// The hand fan enlarges few cards so they are easier to read, so its
+  /// text keeps most of the growth.
+  static const handTextDamping = 0.7;
 
   const ActionCardFace({
     super.key,
@@ -219,16 +244,48 @@ class ActionCardFace extends StatelessWidget {
     this.trailing,
     this.footer,
     this.layoutScale = 1,
+    this.textDamping = 0.22,
   });
 
-  /// A blown-up card is about giving the rules room, not shouting them, so
-  /// the type grows a fraction of what the card does - roughly a fifth bump
-  /// at the reveal's 1.9x, against text almost twice hand size before.
-  double get _textScale => 1 + (layoutScale - 1) * 0.22;
+  /// A blown-up reveal card is about giving the rules room, not shouting
+  /// them, so by default the type grows a fraction of what the card does -
+  /// roughly a fifth bump at the reveal's 1.9x, against text almost twice
+  /// hand size before.
+  double get _textScale => 1 + (layoutScale - 1) * textDamping;
+
+  /// Room the title leaves for [trailing] - the fan's swap icon, 18 wide
+  /// plus 2 of padding, both scaled with the card. Skipped when the
+  /// name's longest word would no longer fit the line: an icon over the
+  /// corner beats "Cutpurs" over a lone "e".
+  double _titleInset(BuildContext context, String name, TextStyle style,
+      double lineWidth) {
+    if (trailing == null) return 0;
+    final inset = 20 * layoutScale;
+    // Measure with the font Text will actually use, theme defaults included.
+    final resolved = DefaultTextStyle.of(context).style.merge(style);
+    final painter = TextPainter(
+      textDirection: TextDirection.ltr,
+      textScaler: MediaQuery.textScalerOf(context),
+    );
+    var widest = 0.0;
+    for (final word in name.split(' ')) {
+      painter
+        ..text = TextSpan(text: word, style: resolved)
+        ..layout();
+      if (painter.width > widest) widest = painter.width;
+    }
+    painter.dispose();
+    return widest <= lineWidth - inset ? inset : 0;
+  }
 
   @override
   Widget build(BuildContext context) {
     final spec = cardCatalog[cardId]!;
+    final titleStyle = TextStyle(
+      fontSize: 13 * _textScale,
+      fontWeight: FontWeight.w800,
+      color: const Color(0xFF3A2E20),
+    );
     return Container(
       width: _width * layoutScale,
       height: _height * layoutScale,
@@ -268,14 +325,18 @@ class ActionCardFace extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                spec.name,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13 * _textScale,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF3A2E20),
+              LayoutBuilder(
+                builder: (context, constraints) => Padding(
+                  padding: EdgeInsets.only(
+                    right: _titleInset(
+                        context, spec.name, titleStyle, constraints.maxWidth),
+                  ),
+                  child: Text(
+                    spec.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: titleStyle,
+                  ),
                 ),
               ),
               SizedBox(height: 6 * layoutScale),

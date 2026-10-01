@@ -32,6 +32,7 @@ import '../widgets/turn_splash_overlay.dart';
 import '../widgets/tutorial_banner.dart';
 import '../widgets/welcome_card.dart';
 import '../observability/analytics.dart';
+import '../state/card_blocked_reason.dart';
 import '../state/game_controller.dart';
 import '../tutorial/tutorial_director.dart';
 import 'game_over_screen.dart';
@@ -1244,6 +1245,10 @@ class _GameScreenState extends State<GameScreen> {
                       .map((a) => a.cardId)
                       .toSet()
                   : const {},
+              blockedReasons: {
+                for (final id in human.hand)
+                  id: cardBlockedReason(state, human.id, id),
+              },
               replaceableCardIds: controller.isHumanTurn
                   ? allowed
                       .whereType<ReplaceCard>()

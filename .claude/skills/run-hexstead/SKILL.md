@@ -185,9 +185,16 @@ Points on a 402x874 screen:
 
 | Step | Tap | Lands on |
 |---|---|---|
-| 1 | 200, 550 | New Game (menu) |
-| 2 | 201, 624 | Begin (setup) |
+| 1 | 200, 506 | New Game (menu) |
+| 2 | 201, 634 | Begin (setup) |
 | 3 | 201, 617 | Start (welcome card) |
+
+> **Gotcha - 200, 550 is Continue, not New Game.** It resumes the saved
+> game instead of starting a fresh one.
+
+> **Gotcha - a test interstitial may play after Begin.** The free tier
+> shows one pre-game ad (Google test creative on debug builds). Wait
+> ~20s for its close X to appear at about `385, 90`, then tap it.
 
 Steps 1-3 are green buttons - prefer re-deriving with the green finder
 over trusting these if the menu has changed.
